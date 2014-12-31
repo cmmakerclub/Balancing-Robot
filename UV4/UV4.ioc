@@ -1,5 +1,5 @@
 #MicroXplorer Configuration settings - do not modify
-#Wed Dec 31 16:03:16 ICT 2014
+#Wed Dec 31 16:04:15 ICT 2014
 ADC.Channel=ADC_CHANNEL_1
 ADC.Channel-0\#ChannelRegularConversion=ADC_CHANNEL_1
 ADC.DiscontinuousConvMode=ENABLE
@@ -137,6 +137,23 @@ PF1-OSC_OUT.GPIO_PuPd=GPIO_NOPULL
 PF1-OSC_OUT.GPIO_Speed=GPIO_SPEED_LOW
 PF1-OSC_OUT.Locked=true
 PF1-OSC_OUT.Signal=GPIO_Output
+ProjectManager.AskForMigrate=true
+ProjectManager.BackupPrevious=false
+ProjectManager.CompilerOptimize=2
+ProjectManager.ComputerToolchain=false
+ProjectManager.CoupleFile=false
+ProjectManager.DeletePrevious=true
+ProjectManager.DeviceId=STM32F030F4Px
+ProjectManager.FirmwarePackage=STM32Cube FW_F0 V1.1.0
+ProjectManager.FreePins=false
+ProjectManager.HalAssertFull=false
+ProjectManager.KeepUserCode=true
+ProjectManager.LastFirmware=true
+ProjectManager.LibraryCopy=1
+ProjectManager.ProjectBuild=false
+ProjectManager.ProjectFileName=UV4.ioc
+ProjectManager.ProjectName=UV4
+ProjectManager.TargetToolchain=MDK-ARM 4.73
 RCC.AHBFreq_Value=48000000
 RCC.APB1Freq_Value=48000000
 RCC.APB1TimFreq_Value=48000000
