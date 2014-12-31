@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 31/12/2014 21:43:00
+  * Date               : 31/12/2014 22:14:00
   * Description        : Main program body
   ******************************************************************************
   *
@@ -115,7 +115,7 @@ float smooth_filter(float alfa, float new_data, float prev_data);
 void SR_04_measuring(void);
 void Reset_pin_10us(void);
 void timer17_overflow(void);
-void Echo_read(void);
+
 
 /* USER CODE END PFP */
 
@@ -162,7 +162,7 @@ int main(void)
   /* Infinite loop */
   while (1)
   {
-    HAL_Delay(1);
+    HAL_Delay(25);
     SR_04_measuring();
     
   }
@@ -314,10 +314,12 @@ void MX_TIM16_Init(void)
   htim16.Instance = TIM16;
   htim16.Init.Prescaler = 0;
   htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim16.Init.Period = 479;
+  htim16.Init.Period = 301;
   htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim16.Init.RepetitionCounter = 0;
   HAL_TIM_Base_Init(&htim16);
+
+  HAL_TIM_OnePulse_Init(&htim16, TIM_OPMODE_SINGLE);
 
 }
 
@@ -598,29 +600,29 @@ void SR_04_measuring(void)
 {
   sr_04_channel = 1 - sr_04_channel;    // switch direction 0front & 1rear 
   
-  TIM16->CNT = 0;
-  HAL_TIM_Base_Start_IT(&htim16);
+  //TIM16->CNT = 0;
+  HAL_TIM_Base_Start_IT(&htim16);   // generate 10us pulse
+  
+//  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
+  
   if (sr_04_channel)
     // rear mesauring     
     {
-      HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_SET);
     }
     else
     // front mesauring        
     {
-      HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
     }
 }
 
 void Reset_pin_10us(void)
 {
-  
- // HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_0 | GPIO_PIN_1);
   HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0 | GPIO_PIN_1, GPIO_PIN_RESET);
-  HAL_TIM_Base_Stop_IT(&htim16);
 }
 
-void Echo_read(void)
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   static int8_t echo_state;
   uint16_t tim17_cnt;
