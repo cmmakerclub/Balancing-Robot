@@ -1,11 +1,11 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 31/12/2014 22:14:00
+  * Date               : 01/01/2015 02:10:32
   * Description        : Main program body
   ******************************************************************************
   *
-  * COPYRIGHT(c) 2014 STMicroelectronics
+  * COPYRIGHT(c) 2015 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -337,7 +337,6 @@ void MX_TIM17_Init(void)
   htim17.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim17.Init.RepetitionCounter = 0;
   HAL_TIM_Base_Init(&htim17);
-  
 
 }
 

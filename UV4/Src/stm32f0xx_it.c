@@ -1,11 +1,11 @@
 /**
   ******************************************************************************
   * @file    stm32f0xx_it.c
-  * @date    31/12/2014 21:42:59
+  * @date    01/01/2015 02:10:32
   * @brief   Interrupt Service Routines.
   ******************************************************************************
   *
-  * COPYRIGHT(c) 2014 STMicroelectronics
+  * COPYRIGHT(c) 2015 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -39,32 +39,17 @@
 
 extern void Reset_pin_10us(void);
 extern void timer17_overflow(void);
-extern void Echo_read(void);
+
 
 
 /* USER CODE END 0 */
 /* External variables --------------------------------------------------------*/
 
 extern TIM_HandleTypeDef htim16;
-extern TIM_HandleTypeDef htim17;
 
 /******************************************************************************/
 /*            Cortex-M0 Processor Interruption and Exception Handlers         */ 
 /******************************************************************************/
-
-/**
-* @brief This function handles TIM17 global interrupt.
-*/
-void TIM17_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM17_IRQn 0 */
-  timer17_overflow();
-  /* USER CODE END TIM17_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim17);
-  /* USER CODE BEGIN TIM17_IRQn 1 */
-
-  /* USER CODE END TIM17_IRQn 1 */
-}
 
 /**
 * @brief This function handles EXTI Line 0 and Line 1 interrupts.
@@ -72,7 +57,7 @@ void TIM17_IRQHandler(void)
 void EXTI0_1_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI0_1_IRQn 0 */
-  Echo_read();
+
   /* USER CODE END EXTI0_1_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
   /* USER CODE BEGIN EXTI0_1_IRQn 1 */
@@ -86,11 +71,11 @@ void EXTI0_1_IRQHandler(void)
 void TIM16_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM16_IRQn 0 */
-  Reset_pin_10us();
+
   /* USER CODE END TIM16_IRQn 0 */
   HAL_TIM_IRQHandler(&htim16);
   /* USER CODE BEGIN TIM16_IRQn 1 */
-
+  Reset_pin_10us();
   /* USER CODE END TIM16_IRQn 1 */
 }
 
