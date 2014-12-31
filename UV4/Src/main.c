@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 01/01/2015 02:10:32
+  * Date               : 01/01/2015 03:23:34
   * Description        : Main program body
   ******************************************************************************
   *
@@ -114,7 +114,7 @@ void A4988_driver(FunctionalState tmp);
 float smooth_filter(float alfa, float new_data, float prev_data);
 void SR_04_measuring(void);
 void Reset_pin_10us(void);
-void timer17_overflow(void);
+
 
 
 /* USER CODE END PFP */
@@ -151,22 +151,20 @@ int main(void)
   /* USER CODE BEGIN 2 */
   
   A4988_driver(DISABLE);
-    
-  Initial_MPU6050();
 
+  HAL_TIM_Base_Start(&htim17);   // iuput capture for SR-04 module
 
+  Initial_MPU6050();  
 
-
-  HAL_TIM_Base_Start_IT(&htim17);   // iuput capture for SR-04 module
-  
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN 3 */
   /* Infinite loop */
   while (1)
   {
-    HAL_Delay(20);
-    SR_04_measuring();
+    HAL_Delay(100);
+
+//    SR_04_measuring();    // calling at 50Hz
     
   }
   /* USER CODE END 3 */
@@ -246,7 +244,7 @@ void MX_I2C1_Init(void)
 
   hi2c1.Instance = I2C1;
   hi2c1.Init.Timing = 0x0000020B;
-  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.OwnAddress1 = 208;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLED;
   hi2c1.Init.OwnAddress2 = 0;
@@ -419,7 +417,7 @@ void MX_GPIO_Init(void)
 
 void Initial_MPU6050(void)
 {
-  
+  HAL_Delay(100); // for stability
   //    Reset to defalt 
   MPU6050_WriteBit(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_DEVICE_RESET_BIT, ENABLE);
 
@@ -435,16 +433,12 @@ void Initial_MPU6050(void)
   //    interupt(Enable)
   MPU6050_WriteBit(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_INT_ENABLE, MPU6050_INTERRUPT_DATA_RDY_BIT, ENABLE);
 
-  //    SetSleepModeStatus(DISABLE)
-  MPU6050_WriteBit(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, DISABLE);
-
   //		SetDLPF(MPU6050_DLPF_BW_5)
   MPU6050_WriteBits(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_CONFIG, MPU6050_CFG_DLPF_CFG_BIT, MPU6050_CFG_DLPF_CFG_LENGTH, MPU6050_DLPF_BW_98);
-
-  //    SetSleepModeStatus(DISABLE) agian hahaha....
+ 
+  //    SetSleepModeStatus(DISABLE)
   MPU6050_WriteBit(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, DISABLE);
-    
-  HAL_Delay(50); // for stability
+  HAL_Delay(100); // for stability
 }
 
 void MPU6050_WriteBits(uint8_t slaveAddr, uint8_t regAddr, uint8_t bitStart, uint8_t length, uint8_t data)
@@ -652,10 +646,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     }
 }
 
-void timer17_overflow(void)
-{
 
-}
 /* USER CODE END 4 */
 
 #ifdef USE_FULL_ASSERT
