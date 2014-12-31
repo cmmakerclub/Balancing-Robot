@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 31/12/2014 16:04:29
+  * Date               : 31/12/2014 20:03:26
   * Description        : Main program body
   ******************************************************************************
   *
@@ -49,6 +49,9 @@
 #define deg2rad 0.0174532925f
 #define rad2deg 57.29577951f
 
+
+
+
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -67,6 +70,10 @@ UART_HandleTypeDef huart1;
 
 float angle = 0;
 float angle_dot = 0;
+float front_distance = 0;
+float rear_distance = 0;
+uint8_t sr_04_channel = 0;    // 0 = front, 1 = rear
+uint8_t tim17_out =0;   // prevent tim17 over flow  
 
 float kp_1 = 0;
 float ki_1 = 0;
@@ -103,6 +110,12 @@ void MPU6050_ReadBits(uint8_t slaveAddr, uint8_t regAddr, uint8_t bitStart, uint
 void MPU6050_ReadBit(uint8_t slaveAddr, uint8_t regAddr, uint8_t bitNum, uint8_t *data);
 void MPU6050_GetRawAccelGyro(int16_t* AccelGyro);
 void ahrs(void);
+void A4988_driver(FunctionalState tmp);
+float smooth_filter(float alfa, float new_data, float prev_data);
+void SR_04_measuring(void);
+void Reset_pin_10us(void);
+
+
 
 /* USER CODE END PFP */
 
@@ -136,6 +149,8 @@ int main(void)
   MX_USART1_UART_Init();
 
   /* USER CODE BEGIN 2 */
+  
+  A4988_driver(DISABLE);
     
   Initial_MPU6050();
 
@@ -145,9 +160,8 @@ int main(void)
   /* Infinite loop */
   while (1)
   {
-
-    HAL_Delay(1000);
-    
+    HAL_Delay(100);
+    SR_04_measuring();
   }
   /* USER CODE END 3 */
 
@@ -297,12 +311,10 @@ void MX_TIM16_Init(void)
   htim16.Instance = TIM16;
   htim16.Init.Prescaler = 0;
   htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim16.Init.Period = 0;
+  htim16.Init.Period = 479;
   htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim16.Init.RepetitionCounter = 0;
   HAL_TIM_Base_Init(&htim16);
-
-  HAL_TIM_OnePulse_Init(&htim16, TIM_OPMODE_SINGLE);
 
 }
 
@@ -311,9 +323,9 @@ void MX_TIM17_Init(void)
 {
 
   htim17.Instance = TIM17;
-  htim17.Init.Prescaler = 0;
+  htim17.Init.Prescaler = 3;
   htim17.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim17.Init.Period = 0;
+  htim17.Init.Period = 0xffffffff;
   htim17.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim17.Init.RepetitionCounter = 0;
   HAL_TIM_Base_Init(&htim17);
@@ -359,7 +371,7 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
+  GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
   HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA0 */
@@ -368,19 +380,30 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA4 PA5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5;
+  /*Configure GPIO pin : PA4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_MEDIUM;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PB1 */
   GPIO_InitStruct.Pin = GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
+  GPIO_InitStruct.Speed = GPIO_SPEED_MEDIUM;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_1_IRQn);
 
 }
 
@@ -549,18 +572,85 @@ void ahrs(void)
   
   y_roll = 2*(q2*q4 - q1*q3)	;
   q_roll = asinf(y_roll) * rad2deg;   //roll
-      
+     
+}
+void A4988_driver(FunctionalState tmp)
+{
+  if (tmp)
+  {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+  }
+  else
+  {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+  }
+}
+float smooth_filter(float alfa, float new_data, float prev_data)
+{
+  float output = prev_data + (alfa * (new_data - prev_data));
+  return output;
+}
+
+void SR_04_measuring(void)
+{
+  sr_04_channel = 1 - sr_04_channel;    // switch direction 0front & 1rear 
+  
+  TIM16->CNT = 0;
+  HAL_TIM_Base_Start_IT(&htim16);
+  if (sr_04_channel)
+    // rear mesauring     
+    {
+      HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
+    }
+    else
+    // front mesauring        
+    {
+      HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_SET);
+    }
+}
+
+void Reset_pin_10us(void)
+{
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0 | GPIO_PIN_1, GPIO_PIN_RESET);
+  HAL_TIM_Base_Stop_IT(&htim16);
+}
+
+void Echo_read(void)
+{
+  static int8_t echo_state;
+  uint16_t tim17_cnt;
+  float tmp_distance;
+  
+  echo_state = 1 - echo_state;
+  if (echo_state)
+  {
+    tim17_out = 0;
+    TIM17->CNT = 0;
+    HAL_TIM_Base_Start(&htim17);
+  }
+  else
+  {
+    tim17_cnt = TIM17 -> CNT;
+    HAL_TIM_Base_Stop(&htim17);
+  }
+  // convert to centimeter
+  tmp_distance = (float)tim17_cnt / 696.0f;     
+  
+  if (sr_04_channel)
+  {
+    rear_distance = tmp_distance + tim17_out;
+  }
+  else
+  {
+    tmp_distance  = tmp_distance + tim17_out;
+  }
 
 }
 
-
-
-
-
-
-
-
-
+void timer17_overflow(void)
+{
+  tim17_out = 100;
+}
 /* USER CODE END 4 */
 
 #ifdef USE_FULL_ASSERT
