@@ -1,5 +1,5 @@
 #MicroXplorer Configuration settings - do not modify
-#Wed Dec 31 20:03:25 ICT 2014
+#Wed Dec 31 21:42:59 ICT 2014
 ADC.Channel=ADC_CHANNEL_1
 ADC.Channel-0\#ChannelRegularConversion=ADC_CHANNEL_1
 ADC.DiscontinuousConvMode=ENABLE
@@ -50,7 +50,7 @@ MxCube.Version=4.5.0
 NVIC.EXTI0_1_IRQn=true\:0\:0\:false
 NVIC.SysTick_IRQn=true\:0\:0\:false
 NVIC.TIM16_IRQn=true\:0\:0\:false
-NVIC.TIM17_IRQn=true\:1\:0\:true
+NVIC.TIM17_IRQn=true\:0\:0\:true
 PA0.GPIOParameters=GPIO_Label,GPIO_ModeDefaultEXTI,GPIO_PuPd
 PA0.GPIO_Label=Echo
 PA0.GPIO_ModeDefaultEXTI=GPIO_MODE_IT_RISING_FALLING
@@ -176,6 +176,11 @@ SH.S_TIM14_CH1.0=TIM14_CH1,PWM Generation1 CH1
 SH.S_TIM14_CH1.ConfNb=1
 SH.S_TIM3_CH1.0=TIM3_CH1,PWM Generation1 CH1
 SH.S_TIM3_CH1.ConfNb=1
+TIM16.IPParameters=Period
+TIM16.Period=479
+TIM17.IPParameters=Period,Prescaler
+TIM17.Period=0xffff
+TIM17.Prescaler=3
 USART1.BaudRate=9600
 USART1.IPParameters=BaudRate
 VP_ADC_TempSens_Input.Mode=IN-TempSens

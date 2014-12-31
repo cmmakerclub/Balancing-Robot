@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 31/12/2014 20:03:26
+  * Date               : 31/12/2014 21:43:00
   * Description        : Main program body
   ******************************************************************************
   *
@@ -114,8 +114,8 @@ void A4988_driver(FunctionalState tmp);
 float smooth_filter(float alfa, float new_data, float prev_data);
 void SR_04_measuring(void);
 void Reset_pin_10us(void);
-
-
+void timer17_overflow(void);
+void Echo_read(void);
 
 /* USER CODE END PFP */
 
@@ -154,14 +154,17 @@ int main(void)
     
   Initial_MPU6050();
 
+
+
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN 3 */
   /* Infinite loop */
   while (1)
   {
-    HAL_Delay(100);
+    HAL_Delay(1);
     SR_04_measuring();
+    
   }
   /* USER CODE END 3 */
 
@@ -325,7 +328,7 @@ void MX_TIM17_Init(void)
   htim17.Instance = TIM17;
   htim17.Init.Prescaler = 3;
   htim17.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim17.Init.Period = 0xffffffff;
+  htim17.Init.Period = 0xffff;
   htim17.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim17.Init.RepetitionCounter = 0;
   HAL_TIM_Base_Init(&htim17);
@@ -611,6 +614,8 @@ void SR_04_measuring(void)
 
 void Reset_pin_10us(void)
 {
+  
+ // HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_0 | GPIO_PIN_1);
   HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0 | GPIO_PIN_1, GPIO_PIN_RESET);
   HAL_TIM_Base_Stop_IT(&htim16);
 }
@@ -626,12 +631,12 @@ void Echo_read(void)
   {
     tim17_out = 0;
     TIM17->CNT = 0;
-    HAL_TIM_Base_Start(&htim17);
+    HAL_TIM_Base_Start_IT(&htim17);
   }
   else
   {
     tim17_cnt = TIM17 -> CNT;
-    HAL_TIM_Base_Stop(&htim17);
+    HAL_TIM_Base_Stop_IT(&htim17);
   }
   // convert to centimeter
   tmp_distance = (float)tim17_cnt / 696.0f;     

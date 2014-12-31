@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    stm32f0xx_it.c
-  * @date    31/12/2014 20:03:25
+  * @date    31/12/2014 21:42:59
   * @brief   Interrupt Service Routines.
   ******************************************************************************
   *
@@ -37,14 +37,17 @@
 #include "stm32f0xx_it.h"
 /* USER CODE BEGIN 0 */
 
+extern void Reset_pin_10us(void);
+extern void timer17_overflow(void);
+extern void Echo_read(void);
+
+
 /* USER CODE END 0 */
 /* External variables --------------------------------------------------------*/
 
 extern TIM_HandleTypeDef htim16;
 extern TIM_HandleTypeDef htim17;
-extern void Reset_pin_10us(void);
-extern void timer17_overflow(void);
-extern void Echo_read(void);
+
 /******************************************************************************/
 /*            Cortex-M0 Processor Interruption and Exception Handlers         */ 
 /******************************************************************************/
@@ -55,11 +58,11 @@ extern void Echo_read(void);
 void TIM17_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM17_IRQn 0 */
-
+  timer17_overflow();
   /* USER CODE END TIM17_IRQn 0 */
   HAL_TIM_IRQHandler(&htim17);
   /* USER CODE BEGIN TIM17_IRQn 1 */
-  timer17_overflow();
+
   /* USER CODE END TIM17_IRQn 1 */
 }
 
@@ -69,11 +72,11 @@ void TIM17_IRQHandler(void)
 void EXTI0_1_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI0_1_IRQn 0 */
-
+  Echo_read();
   /* USER CODE END EXTI0_1_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
   /* USER CODE BEGIN EXTI0_1_IRQn 1 */
-  Echo_read();
+
   /* USER CODE END EXTI0_1_IRQn 1 */
 }
 
@@ -83,11 +86,11 @@ void EXTI0_1_IRQHandler(void)
 void TIM16_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM16_IRQn 0 */
-
+  Reset_pin_10us();
   /* USER CODE END TIM16_IRQn 0 */
   HAL_TIM_IRQHandler(&htim16);
   /* USER CODE BEGIN TIM16_IRQn 1 */
-  Reset_pin_10us();
+
   /* USER CODE END TIM16_IRQn 1 */
 }
 
