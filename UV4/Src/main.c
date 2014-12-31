@@ -73,7 +73,7 @@ float angle_dot = 0;
 float front_distance = 0;
 float rear_distance = 0;
 uint8_t sr_04_channel = 0;    // 0 = front, 1 = rear
-uint8_t tim17_out =0;   // prevent tim17 over flow  
+uint8_t echo_status = 0;   // prevent tim17 over flow  
 
 float kp_1 = 0;
 float ki_1 = 0;
@@ -156,13 +156,16 @@ int main(void)
 
 
 
+
+  HAL_TIM_Base_Start_IT(&htim17);   // iuput capture for SR-04 module
+  
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN 3 */
   /* Infinite loop */
   while (1)
   {
-    HAL_Delay(25);
+    HAL_Delay(20);
     SR_04_measuring();
     
   }
@@ -328,12 +331,13 @@ void MX_TIM17_Init(void)
 {
 
   htim17.Instance = TIM17;
-  htim17.Init.Prescaler = 3;
+  htim17.Init.Prescaler = 47;
   htim17.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim17.Init.Period = 0xffff;
   htim17.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim17.Init.RepetitionCounter = 0;
   HAL_TIM_Base_Init(&htim17);
+  
 
 }
 
@@ -600,7 +604,8 @@ void SR_04_measuring(void)
 {
   sr_04_channel = 1 - sr_04_channel;    // switch direction 0front & 1rear 
   
-  //TIM16->CNT = 0;
+  echo_status = 0;    // Reset echo input capture ready
+  TIM17->CNT = 0;   // Reset input capture Couter
   HAL_TIM_Base_Start_IT(&htim16);   // generate 10us pulse
   
 //  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
@@ -624,39 +629,31 @@ void Reset_pin_10us(void)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  static int8_t echo_state;
-  uint16_t tim17_cnt;
-  float tmp_distance;
-  
-  echo_state = 1 - echo_state;
-  if (echo_state)
-  {
-    tim17_out = 0;
-    TIM17->CNT = 0;
-    HAL_TIM_Base_Start_IT(&htim17);
-  }
-  else
-  {
-    tim17_cnt = TIM17 -> CNT;
-    HAL_TIM_Base_Stop_IT(&htim17);
-  }
-  // convert to centimeter
-  tmp_distance = (float)tim17_cnt / 696.0f;     
-  
-  if (sr_04_channel)
-  {
-    rear_distance = tmp_distance + tim17_out;
-  }
-  else
-  {
-    tmp_distance  = tmp_distance + tim17_out;
-  }
-
+    if (echo_status)
+    {
+      float tmp_distance = TIM17->CNT;
+      
+      // convert to centimeter
+      tmp_distance = (tmp_distance) / 58.0f;     
+      if (sr_04_channel)
+      {
+        rear_distance =  tmp_distance;
+      }
+      else
+      {
+        front_distance = tmp_distance;
+      }
+    }
+    else
+    {
+      TIM17->CNT = 0;
+      echo_status = 1;
+    }
 }
 
 void timer17_overflow(void)
 {
-  tim17_out = 100;
+
 }
 /* USER CODE END 4 */
 
