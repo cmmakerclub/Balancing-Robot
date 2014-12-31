@@ -637,11 +637,13 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
       tmp_distance = (tmp_distance) / 58.0f;     
       if (sr_04_channel)
       {
-        rear_distance =  tmp_distance;
+//        rear_distance = tmp_distance;
+        rear_distance = smooth_filter(0.3f, tmp_distance, rear_distance);
       }
       else
       {
-        front_distance = tmp_distance;
+//        front_distance = tmp_distance;
+        front_distance = smooth_filter(0.3f, tmp_distance, front_distance);
       }
     }
     else
