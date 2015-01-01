@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 01/01/2015 03:23:34
+  * Date               : 01/01/2015 12:16:44
   * Description        : Main program body
   ******************************************************************************
   *
@@ -44,13 +44,13 @@
 #define ACCELEROMETER_SENSITIVITY   16384.0f  
 #define GYROSCOPE_SENSITIVITY       0.007629510948f    // 1/131.07f  
 #define M_PI                        3.14159265359f	    
-#define dt    0.01f
-#define sampling 100.0f
+#define dt    0.004f
+#define sampling 250
 #define deg2rad 0.0174532925f
 #define rad2deg 57.29577951f
-
-
-
+#define gx_diff 34    // x axis gyro diff
+#define gy_diff 41    // y axis gyro diff
+#define gz_diff 156    // z axis gyro diff
 
 /* USER CODE END Includes */
 
@@ -81,11 +81,10 @@ float ki_1 = 0;
 float kp_2 = 0;
 float kd_2 = 0;
 
-uint16_t AccelGyro[6] = {0};
-uint16_t gx_diff = 0, gy_diff=0, gz_diff=0;
+int16_t AccelGyro[6] = {0};
 float q_yaw, q_pitch, q_roll;                                     
 float q1=1, q2=0, q3=0, q4=0;
-float y_roll=0, y_pitch=0, y0_roll=0, y0_pitch=0;
+float y_roll=0, y_pitch=0;
 
 /* USER CODE END PV */
 
@@ -113,7 +112,7 @@ void ahrs(void);
 void A4988_driver(FunctionalState tmp);
 float smooth_filter(float alfa, float new_data, float prev_data);
 void SR_04_measuring(void);
-void Reset_pin_10us(void);
+void Sampling_isr(void);
 
 
 
@@ -150,22 +149,23 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
   
-  A4988_driver(DISABLE);
+  A4988_driver(DISABLE);    // disable step motor driver
 
-  HAL_TIM_Base_Start(&htim17);   // iuput capture for SR-04 module
+  HAL_TIM_Base_Start(&htim17);   // start iuput capture for SR-04 module
 
-  Initial_MPU6050();  
+  Initial_MPU6050();    // initial mpu6050 with DLPF 98 Hz
 
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN 3 */
+  
+  HAL_TIM_Base_Start_IT(&htim16);   // start controller sampling
+  
   /* Infinite loop */
   while (1)
   {
-    HAL_Delay(100);
-
-//    SR_04_measuring();    // calling at 50Hz
-    
+//    SR_04_measuring();     // mesuaring disrance start at 50Hz
+    HAL_Delay(20);
   }
   /* USER CODE END 3 */
 
@@ -313,14 +313,12 @@ void MX_TIM16_Init(void)
 {
 
   htim16.Instance = TIM16;
-  htim16.Init.Prescaler = 0;
+  htim16.Init.Prescaler = 479;
   htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim16.Init.Period = 301;
+  htim16.Init.Period = 399;
   htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim16.Init.RepetitionCounter = 0;
   HAL_TIM_Base_Init(&htim16);
-
-  HAL_TIM_OnePulse_Init(&htim16, TIM_OPMODE_SINGLE);
 
 }
 
@@ -505,7 +503,7 @@ void MPU6050_GetRawAccelGyro(int16_t* AccelGyro)
 void ahrs(void)
 {
 	// quaternion base process 
-  float x;
+
 	float Norm;
 	float ax = AccelGyro[0];
 	float ay = AccelGyro[1];
@@ -561,19 +559,21 @@ void ahrs(void)
 	q2 += q2_dot * dt;
 	q3 += q3_dot * dt;
 	q4 += q4_dot * dt;
+  
 	// Normalise
 	Norm = sqrtf(q1 * q1 + q2 * q2 + q3 * q3 + q4 * q4 );
 	q1 /= Norm;
 	q2 /= Norm;
 	q3 /= Norm;
 	q4 /= Norm;
-	// convert to euler
-	y_pitch =  2*(q3*q4 + q1*q2);
-	x =  2*(0.5 - q2*q2 - q3*q3);
-  q_pitch = atan2f(y_pitch,x) * rad2deg;  //pitch
   
-  y_roll = 2*(q2*q4 - q1*q3)	;
-  q_roll = asinf(y_roll) * rad2deg;   //roll
+	// convert to euler
+//  float x=  2*(0.5 - q2*q2 - q3*q3);
+//	y_roll =  2*(q3*q4 + q1*q2);
+//  q_roll = atan2f(y_roll,x) * rad2deg;  //roll
+  
+  y_pitch = 2*(q2*q4 - q1*q3)	;
+  q_pitch = asinf(y_pitch) * rad2deg;   //pitch
      
 }
 void A4988_driver(FunctionalState tmp)
@@ -598,11 +598,7 @@ void SR_04_measuring(void)
   sr_04_channel = 1 - sr_04_channel;    // switch direction 0front & 1rear 
   
   echo_status = 0;    // Reset echo input capture ready
-  TIM17->CNT = 0;   // Reset input capture Couter
-  HAL_TIM_Base_Start_IT(&htim16);   // generate 10us pulse
-  
-//  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
-  
+  __disable_irq();    // disable interrupt 10 uS
   if (sr_04_channel)
     // rear mesauring     
     {
@@ -613,11 +609,11 @@ void SR_04_measuring(void)
     {
       HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
     }
-}
-
-void Reset_pin_10us(void)
-{
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0 | GPIO_PIN_1, GPIO_PIN_RESET);
+    
+    uint16_t count_delay = 76;
+    while (count_delay > 0) count_delay--;    // dalay 10uS
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0 | GPIO_PIN_1, GPIO_PIN_RESET);
+    __enable_irq();   // resume interrupt  
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
@@ -647,6 +643,13 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 }
 
 
+void Sampling_isr(void)
+{
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
+  MPU6050_GetRawAccelGyro(AccelGyro);
+  ahrs();
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_RESET);
+}
 /* USER CODE END 4 */
 
 #ifdef USE_FULL_ASSERT
