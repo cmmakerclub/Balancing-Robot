@@ -46,6 +46,7 @@
 #define M_PI                        3.14159265359f	    
 #define dt    0.004f
 #define sampling 250
+#define data2voltage 0.00332992f
 #define deg2rad 0.0174532925f
 #define rad2deg 57.29577951f
 #define gx_diff 34    // x axis gyro diff
@@ -70,6 +71,7 @@ UART_HandleTypeDef huart1;
 
 float angle = 0;
 float angle_dot = 0;
+float Battery_voltage = 0;
 float front_distance = 0;
 float rear_distance = 0;
 uint8_t sr_04_channel = 0;    // 0 = front, 1 = rear
@@ -108,10 +110,11 @@ void MPU6050_WriteBit(uint8_t slaveAddr, uint8_t regAddr, uint8_t bitNum, uint8_
 void MPU6050_ReadBits(uint8_t slaveAddr, uint8_t regAddr, uint8_t bitStart, uint8_t length, uint8_t *data);
 void MPU6050_ReadBit(uint8_t slaveAddr, uint8_t regAddr, uint8_t bitNum, uint8_t *data);
 void MPU6050_GetRawAccelGyro(int16_t* AccelGyro);
-void ahrs(void);
-void A4988_driver(FunctionalState tmp);
-float smooth_filter(float alfa, float new_data, float prev_data);
+void Ahrs(void);
+void A4988_driver_state(FunctionalState tmp);
+float Smooth_filter(float alfa, float new_data, float prev_data);
 void SR_04_measuring(void);
+void Mesuaring_batt(void);
 void Sampling_isr(void);
 
 
@@ -149,10 +152,10 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
   
-  A4988_driver(DISABLE);    // disable step motor driver
+  A4988_driver_state(DISABLE);    // disable step motor driver
 
   HAL_TIM_Base_Start(&htim17);   // start iuput capture for SR-04 module
-
+  
   Initial_MPU6050();    // initial mpu6050 with DLPF 98 Hz
 
   /* USER CODE END 2 */
@@ -164,8 +167,9 @@ int main(void)
   /* Infinite loop */
   while (1)
   {
-//    SR_04_measuring();     // mesuaring disrance start at 50Hz
-    HAL_Delay(20);
+    SR_04_measuring();     // mesuaring disrance 
+    Mesuaring_batt();   // mesuaring battary voltage
+    HAL_Delay(20);    // dely for 50Hz
   }
   /* USER CODE END 3 */
 
@@ -500,7 +504,7 @@ void MPU6050_GetRawAccelGyro(int16_t* AccelGyro)
 
 }
 
-void ahrs(void)
+void Ahrs(void)
 {
 	// quaternion base process 
 
@@ -576,7 +580,7 @@ void ahrs(void)
   q_pitch = asinf(y_pitch) * rad2deg;   //pitch
      
 }
-void A4988_driver(FunctionalState tmp)
+void A4988_driver_state(FunctionalState tmp)
 {
   if (tmp)
   {
@@ -587,7 +591,7 @@ void A4988_driver(FunctionalState tmp)
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
   }
 }
-float smooth_filter(float alfa, float new_data, float prev_data)
+float Smooth_filter(float alfa, float new_data, float prev_data)
 {
   float output = prev_data + (alfa * (new_data - prev_data));
   return output;
@@ -616,6 +620,12 @@ void SR_04_measuring(void)
     __enable_irq();   // resume interrupt  
 }
 
+void Mesuaring_batt(void)
+{
+  HAL_ADC_Start(&hadc);
+  float tmp_adc = (float)HAL_ADC_GetValue(&hadc) * data2voltage;
+  Battery_voltage = Smooth_filter(0.3f, (float)tmp_adc, Battery_voltage);
+}
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if (echo_status)
@@ -627,12 +637,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
       if (sr_04_channel)
       {
 //        rear_distance = tmp_distance;
-        rear_distance = smooth_filter(0.3f, tmp_distance, rear_distance);
+        rear_distance = Smooth_filter(0.3f, tmp_distance, rear_distance);
       }
       else
       {
 //        front_distance = tmp_distance;
-        front_distance = smooth_filter(0.3f, tmp_distance, front_distance);
+        front_distance = Smooth_filter(0.3f, tmp_distance, front_distance);
       }
     }
     else
@@ -647,7 +657,7 @@ void Sampling_isr(void)
 {
   HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
   MPU6050_GetRawAccelGyro(AccelGyro);
-  ahrs();
+  Ahrs();
   HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_RESET);
 }
 /* USER CODE END 4 */
