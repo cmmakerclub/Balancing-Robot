@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    stm32f0xx_it.c
-  * @date    01/01/2015 02:10:32
+  * @date    01/01/2015 19:12:40
   * @brief   Interrupt Service Routines.
   ******************************************************************************
   *
@@ -37,10 +37,7 @@
 #include "stm32f0xx_it.h"
 /* USER CODE BEGIN 0 */
 
-extern void Reset_pin_10us(void);
-extern void timer17_overflow(void);
-
-
+extern void Sampling_isr(void);
 
 /* USER CODE END 0 */
 /* External variables --------------------------------------------------------*/
@@ -75,7 +72,7 @@ void TIM16_IRQHandler(void)
   /* USER CODE END TIM16_IRQn 0 */
   HAL_TIM_IRQHandler(&htim16);
   /* USER CODE BEGIN TIM16_IRQn 1 */
-  Reset_pin_10us();
+  Sampling_isr();
   /* USER CODE END TIM16_IRQn 1 */
 }
 

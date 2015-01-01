@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 01/01/2015 12:16:44
+  * Date               : 01/01/2015 19:12:41
   * Description        : Main program body
   ******************************************************************************
   *
@@ -195,10 +195,10 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PREDIV = RCC_PREDIV_DIV1;
   HAL_RCC_OscConfig(&RCC_OscInitStruct);
 
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK;
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK|RCC_CLOCKTYPE_PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV8;
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1);
 
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_I2C1;
@@ -248,7 +248,7 @@ void MX_I2C1_Init(void)
 
   hi2c1.Instance = I2C1;
   hi2c1.Init.Timing = 0x0000020B;
-  hi2c1.Init.OwnAddress1 = 208;
+  hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLED;
   hi2c1.Init.OwnAddress2 = 0;
@@ -317,7 +317,7 @@ void MX_TIM16_Init(void)
 {
 
   htim16.Instance = TIM16;
-  htim16.Init.Prescaler = 479;
+  htim16.Init.Prescaler = 119;
   htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim16.Init.Period = 399;
   htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -331,7 +331,7 @@ void MX_TIM17_Init(void)
 {
 
   htim17.Instance = TIM17;
-  htim17.Init.Prescaler = 47;
+  htim17.Init.Prescaler = 11;
   htim17.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim17.Init.Period = 0xffff;
   htim17.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -633,7 +633,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
       float tmp_distance = TIM17->CNT;
       
       // convert to centimeter
-      tmp_distance = (tmp_distance) / 58.0f;     
+      tmp_distance = tmp_distance / 58.0f;     
       if (sr_04_channel)
       {
 //        rear_distance = tmp_distance;
@@ -655,10 +655,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 void Sampling_isr(void)
 {
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
+//  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
   MPU6050_GetRawAccelGyro(AccelGyro);
   Ahrs();
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_RESET);
+//  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_RESET);
 }
 /* USER CODE END 4 */
 
