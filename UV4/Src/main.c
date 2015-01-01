@@ -44,8 +44,10 @@
 #define ACCELEROMETER_SENSITIVITY   16384.0f  
 #define GYROSCOPE_SENSITIVITY       0.007629510948f    // 1/131.07f  
 #define M_PI                        3.14159265359f	    
-#define dt    0.004f
-#define sampling 250
+
+#define dt    0.005f
+#define sampling 200
+
 #define data2voltage 0.00332992f
 #define deg2rad 0.0174532925f
 #define rad2deg 57.29577951f
@@ -153,6 +155,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
   
   A4988_driver_state(DISABLE);    // disable step motor driver
+  
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim14, TIM_CHANNEL_1);
+  
 
   HAL_TIM_Base_Start(&htim17);   // start iuput capture for SR-04 module
   
@@ -167,7 +173,7 @@ int main(void)
   /* Infinite loop */
   while (1)
   {
-    SR_04_measuring();     // mesuaring disrance 
+    SR_04_measuring();    // mesuaring disrance 
     Mesuaring_batt();   // mesuaring battary voltage
     HAL_Delay(20);    // dely for 50Hz
   }
@@ -271,7 +277,7 @@ void MX_TIM3_Init(void)
   TIM_OC_InitTypeDef sConfigOC;
 
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 0;
+  htim3.Init.Prescaler = 11;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim3.Init.Period = 0;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -319,7 +325,7 @@ void MX_TIM16_Init(void)
   htim16.Instance = TIM16;
   htim16.Init.Prescaler = 119;
   htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim16.Init.Period = 399;
+  htim16.Init.Period = 449;
   htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim16.Init.RepetitionCounter = 0;
   HAL_TIM_Base_Init(&htim16);
@@ -652,6 +658,44 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     }
 }
 
+
+void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
+{
+  // write direction pin left motor
+  if (velocity_mL_tmp > 0)
+  {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+  }
+  else
+  {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+    velocity_mL_tmp = -velocity_mL_tmp;
+  }
+  
+  // write direction pin right motor
+  if (velocity_mR_tmp > 0)
+  {
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+  }
+  else
+  {
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+    velocity_mR_tmp = -velocity_mR_tmp;
+  }
+  
+  // calculate period * 149.7927 pulse / 1 cm *
+  
+  float period_L = 0;
+  float period_R = 0;
+  
+  // write register prescale from 12 MHz
+  
+  
+  // write register 50% dutycycle
+
+  
+  
+}
 
 void Sampling_isr(void)
 {
