@@ -40,6 +40,9 @@
 #include "MPU6050.h"
 #include <math.h>
 
+#define limit_angle                 30    // degree
+#define limit_speed                 80    // cm/s
+
 #define beta                        0.1f     
 #define ACCELEROMETER_SENSITIVITY   16384.0f  
 #define GYROSCOPE_SENSITIVITY       0.007629510948f    // 1/131.07f  
@@ -90,13 +93,13 @@ __IO float angle;
 // PID variable //
 float error = 0; 
 float error_dot = 0;
-float ref = 0;
+float ref = 4;
 float ref_dot = 0;
-float kp_1 = 0;
-float ki_1 = 0;
+float kp_1 = 25;
+float kd_1 = 0;
 
 float kp_2 = 0;
-float kd_2 = 0;
+float ki_2 = 0;
 
 /* USER CODE END PV */
 
@@ -706,8 +709,6 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
   
   if (period_L > 65535) period_L = 65535;
   if (period_R > 65535) period_R = 65535; 
-
-  debug =  period_L;
   
   // Motor L
   if (velocity_mL_tmp < 2.67)    // 50 Hz min 0.3338 cm/s
@@ -756,19 +757,22 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
 
 void Sampling_isr(void)
 {
+  
+  static float integral_F;
   // call at 200 Hz
   MPU6050_GetRawAccelGyro(AccelGyro);
   Ahrs();
   
 
-  if ((angle < 1) &&(angle > -1) );
+  if ((angle < ref+1) &&(angle > ref-1))
   {
     A4988_driver_state(ENABLE);
   }
-//  if ((angle > 15) || (angle < -15))
-//  {
-//    A4988_driver_state(DISABLE);
-//  }
+  if ((angle > limit_angle) || (angle < -limit_angle))
+  {
+    A4988_driver_state(DISABLE);
+    integral_F = 0;
+  }
 
   
   
@@ -779,7 +783,12 @@ void Sampling_isr(void)
   error = angle - ref; 
   error_dot = error - error_prev;
   
-  A4988_driver_output(error, error);
+  integral_F += ((error * kp_1 * dt) + (error_dot * kd_1));
+  debug = integral_F;
+  
+  if (integral_F > limit_speed) integral_F = limit_speed;
+  if (integral_F < -limit_speed) integral_F = -limit_speed; 
+  A4988_driver_output(integral_F, integral_F);
 
 }
 /* USER CODE END 4 */
