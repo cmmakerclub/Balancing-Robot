@@ -45,7 +45,7 @@
 #define GYROSCOPE_SENSITIVITY       0.007629510948f    // 1/131.07f  
 #define M_PI                        3.14159265359f	    
 
-#define clock_cnt                   100000.0f
+#define clock_cnt                   2000000.0f
 #define dt                          0.005f
 #define sampling                    200
 
@@ -74,24 +74,29 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
-float angle = 0;
-float angle_dot = 0;
-float Battery_voltage = 0;
-float front_distance = 0;
-float rear_distance = 0;
+float debug;
+
+float Battery_voltage = 12;   // assume full battery
+float front_distance = 100;   // assume no obstacle
+float rear_distance = 100;    // assume no obstacle
 uint8_t sr_04_channel = 0;    // 0 = front, 1 = rear
 uint8_t echo_status = 0;   // prevent tim17 over flow  
 
+
+int16_t AccelGyro[6] = {0};                              
+float q1=1, q2=0, q3=0, q4=0;
+__IO float angle;    
+
+// PID variable //
+float error = 0; 
+float error_dot = 0;
+float ref = 0;
+float ref_dot = 0;
 float kp_1 = 0;
 float ki_1 = 0;
 
 float kp_2 = 0;
 float kd_2 = 0;
-
-int16_t AccelGyro[6] = {0};
-float angle;                                     
-float q1=1, q2=0, q3=0, q4=0;
-
 
 /* USER CODE END PV */
 
@@ -167,7 +172,7 @@ int main(void)
   
   Initial_MPU6050();    // initial mpu6050 with DLPF 98 Hz
   
-  A4988_driver_state(ENABLE);    // disable step motor driver
+  A4988_driver_state(DISABLE);    // disable step motor driver
 
   /* USER CODE END 2 */
 
@@ -175,13 +180,12 @@ int main(void)
   
   HAL_TIM_Base_Start_IT(&htim16);   // start controller sampling
   
-  A4988_driver_output(1, 1);
-  
   /* Infinite loop */
   while (1)
   {
     SR_04_measuring();    // mesuaring disrance 
     Mesuaring_batt();   // mesuaring battary voltage
+    
     HAL_Delay(20);    // dely for 50Hz
   }
   /* USER CODE END 3 */
@@ -284,7 +288,7 @@ void MX_TIM3_Init(void)
   TIM_OC_InitTypeDef sConfigOC;
 
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 479;
+  htim3.Init.Prescaler = 23;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim3.Init.Period = 1000;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -309,7 +313,7 @@ void MX_TIM14_Init(void)
   TIM_OC_InitTypeDef sConfigOC;
 
   htim14.Instance = TIM14;
-  htim14.Init.Prescaler = 479;
+  htim14.Init.Prescaler = 23;
   htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim14.Init.Period = 1000;
   htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -668,6 +672,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
 {
+  static int8_t count_mL;
+  static int8_t count_mR;  
   // write direction pin left motor
   if (velocity_mL_tmp > 0)
   {
@@ -690,32 +696,90 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
     velocity_mR_tmp = -velocity_mR_tmp;
   }
   
+//  velocity_mL_tmp *= dt;
+//  velocity_mR_tmp *= dt;
+  
   // calculate period * 149.7927 pulse / 1 cm *
   
-  float period_L = clock_cnt * inv_cm2pulse / velocity_mL_tmp;
-  float period_R = clock_cnt * inv_cm2pulse / velocity_mR_tmp;
+  float period_L = (float)clock_cnt * (float)inv_cm2pulse / (float)velocity_mL_tmp;
+  float period_R = (float)clock_cnt * (float)inv_cm2pulse / (float)velocity_mR_tmp;
   
-  // write auto reload register (period)
-  TIM3 -> ARR = period_R;
-  TIM14 -> ARR = period_L;
+  if (period_L > 65535) period_L = 65535;
+  if (period_R > 65535) period_R = 65535; 
+
+  debug =  period_L;
   
-  // write register 50% dutycycle (period/2)
-  TIM3 -> CCR1 = period_R * 0.5f;
-  TIM14 -> CCR1 = period_L * 0.5f;
+  // Motor L
+  if (velocity_mL_tmp < 2.67)    // 50 Hz min 0.3338 cm/s
+  {
+    count_mL--;
+    if (count_mL <= 0)
+    {
+      TIM14 -> ARR = period_L;
+      TIM14 -> CCR1 = period_L * 0.5f;
+      TIM14 -> CNT = 0;   //reset counter register tim14
+      count_mL = 4;
+    }
+  }
+  else     // 200 Hz min 1.3352 cm/s
+  {
+    TIM14 -> ARR = period_L;
+    TIM14 -> CCR1 = period_L * 0.5f;
+    TIM14 -> CNT = 0;   //reset counter register tim14
+    count_mL = 0;
+  }
   
-  TIM3 -> CNT = 0;    //reset counter register tim3
-  TIM14 -> CNT = 0;   //reset counter register tim14
+  // Motor R
+  if (velocity_mR_tmp < 2.67)    // 50 Hz min 0.3338 cm/s
+  {
+    count_mR--;
+    if (count_mR <= 0)
+    {
+      TIM3 -> ARR = period_R;
+      TIM3 -> CCR1 = period_R * 0.5f;
+      TIM3 -> CNT = 0;    //reset counter register tim3
+      count_mR = 4;
+    }
+  }
+  else     // 200 Hz min 1.3352 cm/s
+  {
+    TIM3 -> ARR = period_R;
+    TIM3 -> CCR1 = period_R * 0.5f;
+    TIM3 -> CNT = 0;    //reset counter register tim3
+    count_mR = 0;
+  }
+
+
+
   
 }
 
 void Sampling_isr(void)
 {
-// call at 200 Hz
+  // call at 200 Hz
   MPU6050_GetRawAccelGyro(AccelGyro);
   Ahrs();
   
-  
 
+  if ((angle < 1) &&(angle > -1) );
+  {
+    A4988_driver_state(ENABLE);
+  }
+//  if ((angle > 15) || (angle < -15))
+//  {
+//    A4988_driver_state(DISABLE);
+//  }
+
+  
+  
+  // PD controller 
+  
+  float error_prev = error ;
+
+  error = angle - ref; 
+  error_dot = error - error_prev;
+  
+  A4988_driver_output(error, error);
 
 }
 /* USER CODE END 4 */
