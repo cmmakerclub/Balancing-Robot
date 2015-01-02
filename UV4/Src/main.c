@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 01/01/2015 19:12:41
+  * Date               : 01/01/2015 21:19:01
   * Description        : Main program body
   ******************************************************************************
   *
@@ -45,15 +45,18 @@
 #define GYROSCOPE_SENSITIVITY       0.007629510948f    // 1/131.07f  
 #define M_PI                        3.14159265359f	    
 
-#define dt    0.005f
-#define sampling 200
+#define clock_cnt                   100000.0f
+#define dt                          0.005f
+#define sampling                    200
 
-#define data2voltage 0.00332992f
-#define deg2rad 0.0174532925f
-#define rad2deg 57.29577951f
-#define gx_diff 34    // x axis gyro diff
-#define gy_diff 41    // y axis gyro diff
-#define gz_diff 156    // z axis gyro diff
+#define inv_cm2pulse                    0.006675883837f
+
+#define data2voltage                0.00332992f
+#define deg2rad                     0.0174532925f
+#define rad2deg                     57.29577951f
+#define gx_diff                     34    // x axis gyro diff
+#define gy_diff                     41    // y axis gyro diff
+#define gz_diff                     156    // z axis gyro diff
 
 /* USER CODE END Includes */
 
@@ -86,9 +89,9 @@ float kp_2 = 0;
 float kd_2 = 0;
 
 int16_t AccelGyro[6] = {0};
-float q_yaw, q_pitch, q_roll;                                     
+float angle;                                     
 float q1=1, q2=0, q3=0, q4=0;
-float y_roll=0, y_pitch=0;
+
 
 /* USER CODE END PV */
 
@@ -114,6 +117,7 @@ void MPU6050_ReadBit(uint8_t slaveAddr, uint8_t regAddr, uint8_t bitNum, uint8_t
 void MPU6050_GetRawAccelGyro(int16_t* AccelGyro);
 void Ahrs(void);
 void A4988_driver_state(FunctionalState tmp);
+void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp);
 float Smooth_filter(float alfa, float new_data, float prev_data);
 void SR_04_measuring(void);
 void Mesuaring_batt(void);
@@ -158,17 +162,20 @@ int main(void)
   
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim14, TIM_CHANNEL_1);
-  
 
   HAL_TIM_Base_Start(&htim17);   // start iuput capture for SR-04 module
   
   Initial_MPU6050();    // initial mpu6050 with DLPF 98 Hz
+  
+  A4988_driver_state(ENABLE);    // disable step motor driver
 
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN 3 */
   
   HAL_TIM_Base_Start_IT(&htim16);   // start controller sampling
+  
+  A4988_driver_output(1, 1);
   
   /* Infinite loop */
   while (1)
@@ -201,10 +208,10 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PREDIV = RCC_PREDIV_DIV1;
   HAL_RCC_OscConfig(&RCC_OscInitStruct);
 
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK|RCC_CLOCKTYPE_PCLK1;
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV8;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1);
 
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_I2C1;
@@ -277,9 +284,9 @@ void MX_TIM3_Init(void)
   TIM_OC_InitTypeDef sConfigOC;
 
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 11;
+  htim3.Init.Prescaler = 479;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 0;
+  htim3.Init.Period = 1000;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   HAL_TIM_PWM_Init(&htim3);
 
@@ -288,7 +295,7 @@ void MX_TIM3_Init(void)
   HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig);
 
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
+  sConfigOC.Pulse = 1001;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1);
@@ -302,16 +309,16 @@ void MX_TIM14_Init(void)
   TIM_OC_InitTypeDef sConfigOC;
 
   htim14.Instance = TIM14;
-  htim14.Init.Prescaler = 0;
+  htim14.Init.Prescaler = 479;
   htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim14.Init.Period = 0;
+  htim14.Init.Period = 1000;
   htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   HAL_TIM_Base_Init(&htim14);
 
   HAL_TIM_PWM_Init(&htim14);
 
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
+  sConfigOC.Pulse = 1001;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   HAL_TIM_PWM_ConfigChannel(&htim14, &sConfigOC, TIM_CHANNEL_1);
@@ -323,9 +330,9 @@ void MX_TIM16_Init(void)
 {
 
   htim16.Instance = TIM16;
-  htim16.Init.Prescaler = 119;
+  htim16.Init.Prescaler = 479;
   htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim16.Init.Period = 449;
+  htim16.Init.Period = 499;
   htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim16.Init.RepetitionCounter = 0;
   HAL_TIM_Base_Init(&htim16);
@@ -337,7 +344,7 @@ void MX_TIM17_Init(void)
 {
 
   htim17.Instance = TIM17;
-  htim17.Init.Prescaler = 11;
+  htim17.Init.Prescaler = 47;
   htim17.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim17.Init.Period = 0xffff;
   htim17.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -582,8 +589,8 @@ void Ahrs(void)
 //	y_roll =  2*(q3*q4 + q1*q2);
 //  q_roll = atan2f(y_roll,x) * rad2deg;  //roll
   
-  y_pitch = 2*(q2*q4 - q1*q3)	;
-  q_pitch = asinf(y_pitch) * rad2deg;   //pitch
+  float y_pitch = 2*(q2*q4 - q1*q3)	;
+  angle = asinf(y_pitch) * rad2deg;   //pitch
      
 }
 void A4988_driver_state(FunctionalState tmp)
@@ -664,11 +671,11 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
   // write direction pin left motor
   if (velocity_mL_tmp > 0)
   {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
   }
   else
   {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
     velocity_mL_tmp = -velocity_mL_tmp;
   }
   
@@ -685,24 +692,31 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
   
   // calculate period * 149.7927 pulse / 1 cm *
   
-  float period_L = 0;
-  float period_R = 0;
+  float period_L = clock_cnt * inv_cm2pulse / velocity_mL_tmp;
+  float period_R = clock_cnt * inv_cm2pulse / velocity_mR_tmp;
   
-  // write register prescale from 12 MHz
+  // write auto reload register (period)
+  TIM3 -> ARR = period_R;
+  TIM14 -> ARR = period_L;
   
+  // write register 50% dutycycle (period/2)
+  TIM3 -> CCR1 = period_R * 0.5f;
+  TIM14 -> CCR1 = period_L * 0.5f;
   
-  // write register 50% dutycycle
-
-  
+  TIM3 -> CNT = 0;    //reset counter register tim3
+  TIM14 -> CNT = 0;   //reset counter register tim14
   
 }
 
 void Sampling_isr(void)
 {
-//  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
+// call at 200 Hz
   MPU6050_GetRawAccelGyro(AccelGyro);
   Ahrs();
-//  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_RESET);
+  
+  
+
+
 }
 /* USER CODE END 4 */
 
