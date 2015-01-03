@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 03/01/2015 17:31:17
+  * Date               : 03/01/2015 23:26:25
   * Description        : Main program body
   ******************************************************************************
   *
@@ -88,6 +88,7 @@ float rear_distance = 100;    // assume no obstacle
 uint8_t sr_04_channel = 0;    // 0 = front, 1 = rear
 uint8_t echo_status = 0;   // prevent tim17 over flow  
 
+uint8_t raw_data_uart[10] = {0};
 uint8_t data_uart[10] = {0};
 
 int16_t AccelGyro[6] = {0};                              
@@ -155,6 +156,8 @@ void SR_04_measuring(void);
 void Mesuaring_batt(void);
 void Sampling_isr(void);
 
+void DMA_callback(struct __DMA_HandleTypeDef *hdma);
+
 
 
 /* USER CODE END PFP */
@@ -164,10 +167,11 @@ void Sampling_isr(void);
 /* USER CODE END 0 */
 
 int main(void)
-
 {
 
   /* USER CODE BEGIN 1 */
+  
+  hdma_usart1_rx.XferCpltCallback = DMA_callback;
   
   /* USER CODE END 1 */
 
@@ -194,7 +198,7 @@ int main(void)
   
   A4988_driver_state(DISABLE);    // disable step motor driver
   
-  HAL_UART_Receive_DMA(&huart1, data_uart, 10);
+  HAL_UART_Receive_DMA(&huart1, raw_data_uart, 10);
   
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim14, TIM_CHANNEL_1);
@@ -415,6 +419,8 @@ void MX_DMA_Init(void)
   __DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
+  HAL_NVIC_SetPriority(DMA1_Channel2_3_IRQn, 2, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
 
 }
 
@@ -802,7 +808,7 @@ void Sampling_isr(void)
   static float velo_from_force;
   static float velocity_mL;
   static float velocity_mR;
-  
+  static int16_t count_un_integrate;
   
   // call at 200 Hz
   MPU6050_GetRawAccelGyro(AccelGyro);
@@ -838,7 +844,8 @@ void Sampling_isr(void)
     error_velo = velo_ref - velo_from_force; 
     error_velo_dot = (error_velo - error_velo_prev) * 50.0f;    // differential of velocity == force
     
-    if (velo_ref == 0)
+    if (count_un_integrate > 0) count_un_integrate --;
+    if (velo_ref == 0 && count_un_integrate == 0)
     {
       error_velo_sum += error_velo * 0.02f;   // 4 * dt = 4 * 0.005 = 0.02
       error_velo_sum_dynamic = 0 ;
@@ -867,8 +874,17 @@ void Sampling_isr(void)
   /*======================================================================================================*/ 
   
   if (Battery_voltage < 10) angle_from_velo = 0;    // battery protection
-  if (front_distance  < 30 && rear_distance > 30) angle_from_velo = -2 ;
-  if (rear_distance  < 30 && front_distance > 30) angle_from_velo = 2 ;
+  if (front_distance  < 30 && rear_distance > 30) 
+  {
+    angle_from_velo = -2 ;
+    count_un_integrate = 400;   // 800 == 8 sec
+  }
+  if (rear_distance  < 30 && front_distance > 30)
+  {
+    angle_from_velo = 2 ;
+    count_un_integrate = 300;
+  }
+  
   ///////////////////////////////////
   // PD controller for angle at 200 Hz
   
@@ -893,6 +909,10 @@ void Sampling_isr(void)
   
   ////////////////////////////////////  
   /*======================================================================================================*/
+}
+void DMA_callback(struct __DMA_HandleTypeDef *hdma)
+{
+  
 }
 /* USER CODE END 4 */
 
