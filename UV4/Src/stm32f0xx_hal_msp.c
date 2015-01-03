@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : stm32f0xx_hal_msp.c
-  * Date               : 03/01/2015 23:26:25
+  * Date               : 04/01/2015 03:22:40
   * Description        : This file provides code for the MSP Initialization 
   *                      and de-Initialization codes.
   ******************************************************************************
@@ -343,7 +343,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
 
     /* Peripheral DMA init*/
   
-    hdma_usart1_rx.Instance = DMA1_Channel3;
+    hdma_usart1_rx.Instance = DMA1_Channel5;
     hdma_usart1_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
     hdma_usart1_rx.Init.PeriphInc = DMA_PINC_DISABLE;
     hdma_usart1_rx.Init.MemInc = DMA_MINC_ENABLE;
@@ -353,8 +353,13 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     hdma_usart1_rx.Init.Priority = DMA_PRIORITY_LOW;
     HAL_DMA_Init(&hdma_usart1_rx);
 
+    __HAL_REMAPDMA_CHANNEL_ENABLE(HAL_REMAPDMA_USART1_RX_DMA_CH5);
+
     __HAL_LINKDMA(huart,hdmarx,hdma_usart1_rx);
 
+  /* System interrupt init*/
+    HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(USART1_IRQn);
   /* USER CODE BEGIN USART1_MspInit 1 */
   
   /* USER CODE END USART1_MspInit 1 */
@@ -381,6 +386,10 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
 
     /* Peripheral DMA DeInit*/
     HAL_DMA_DeInit(huart->hdmarx);
+
+    /* Peripheral interrupt DeInit*/
+    HAL_NVIC_DisableIRQ(USART1_IRQn);
+
   /* USER CODE BEGIN USART1_MspDeInit 1 */
 
   /* USER CODE END USART1_MspDeInit 1 */

@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 03/01/2015 23:26:25
+  * Date               : 04/01/2015 03:22:40
   * Description        : Main program body
   ******************************************************************************
   *
@@ -88,8 +88,9 @@ float rear_distance = 100;    // assume no obstacle
 uint8_t sr_04_channel = 0;    // 0 = front, 1 = rear
 uint8_t echo_status = 0;   // prevent tim17 over flow  
 
-uint8_t raw_data_uart[10] = {0};
-uint8_t data_uart[10] = {0};
+int8_t raw_data_uart[10] = {0};
+int8_t ch1, ch2, ch3, ch4;
+int8_t uart_watchdog = 0;
 
 int16_t AccelGyro[6] = {0};                              
 float q1=1, q2=0, q3=0, q4=0;
@@ -118,7 +119,7 @@ float kp_angle = 25;
 float kd_angle = 0.56;
 
 float kp_velo = 1.8;
-float ki_velo = 0.1;
+float ki_velo = 0.05;
 float kd_velo = 1.1;
 float ki_velo_dyna = 0.2;
 
@@ -157,7 +158,7 @@ void Mesuaring_batt(void);
 void Sampling_isr(void);
 
 void DMA_callback(struct __DMA_HandleTypeDef *hdma);
-
+void DMA_callback_1(void);
 
 
 /* USER CODE END PFP */
@@ -170,8 +171,6 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  
-  hdma_usart1_rx.XferCpltCallback = DMA_callback;
   
   /* USER CODE END 1 */
 
@@ -198,8 +197,6 @@ int main(void)
   
   A4988_driver_state(DISABLE);    // disable step motor driver
   
-  HAL_UART_Receive_DMA(&huart1, raw_data_uart, 10);
-  
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim14, TIM_CHANNEL_1);
 
@@ -220,7 +217,17 @@ int main(void)
   {
     SR_04_measuring();    // mesuaring disrance 
     Mesuaring_batt();   // mesuaring battary voltage
-        // read uart data
+    if (uart_watchdog != 0)
+    {
+      velo_ref = (float)ch2 * 0.3f ;
+    }
+    else
+    {
+      velo_ref = 0;
+    }
+    
+    if (uart_watchdog > 0) uart_watchdog --;    
+    HAL_UART_Receive_IT(&huart1, (uint8_t *)raw_data_uart, 10);   // receive data
     HAL_Delay(20);    // dely for 50Hz
   }
   /* USER CODE END 3 */
@@ -419,8 +426,8 @@ void MX_DMA_Init(void)
   __DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
-  HAL_NVIC_SetPriority(DMA1_Channel2_3_IRQn, 2, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
+  HAL_NVIC_SetPriority(DMA1_Channel4_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel4_5_IRQn);
 
 }
 
@@ -808,7 +815,7 @@ void Sampling_isr(void)
   static float velo_from_force;
   static float velocity_mL;
   static float velocity_mR;
-  static int16_t count_un_integrate;
+  static int16_t count_un_integrate =0;
   
   // call at 200 Hz
   MPU6050_GetRawAccelGyro(AccelGyro);
@@ -844,7 +851,7 @@ void Sampling_isr(void)
     error_velo = velo_ref - velo_from_force; 
     error_velo_dot = (error_velo - error_velo_prev) * 50.0f;    // differential of velocity == force
     
-    if (count_un_integrate > 0) count_un_integrate --;
+
     if (velo_ref == 0 && count_un_integrate == 0)
     {
       error_velo_sum += error_velo * 0.02f;   // 4 * dt = 4 * 0.005 = 0.02
@@ -852,8 +859,9 @@ void Sampling_isr(void)
     }
     else
     {
-      error_velo_sum_dynamic += error_velo * 0.02f;
+      //error_velo_sum_dynamic += error_velo * 0.02f;
     }
+    if (count_un_integrate > 0) count_un_integrate --;
     
     error_velo_sum_output = error_velo_sum * ki_velo; 
     
@@ -882,7 +890,7 @@ void Sampling_isr(void)
   if (rear_distance  < 30 && front_distance > 30)
   {
     angle_from_velo = 2 ;
-    count_un_integrate = 300;
+    count_un_integrate = 400;
   }
   
   ///////////////////////////////////
@@ -910,9 +918,27 @@ void Sampling_isr(void)
   ////////////////////////////////////  
   /*======================================================================================================*/
 }
-void DMA_callback(struct __DMA_HandleTypeDef *hdma)
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
+  int8_t i=0;
+  while(raw_data_uart[i++] != 125 )
+  {
+    if (i>5)
+    {
+      return;
+    }
+  }
   
+  ch1 = raw_data_uart[i];
+  i++ ; 
+  ch2 = raw_data_uart[i];   
+  i++ ; 
+  ch3 = raw_data_uart[i];  
+  i++ ; 
+  ch4 = raw_data_uart[i];
+  
+  uart_watchdog = 25;     // Reset watchdog timer
 }
 /* USER CODE END 4 */
 
