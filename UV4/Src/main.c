@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 01/01/2015 21:19:01
+  * Date               : 03/01/2015 17:31:17
   * Description        : Main program body
   ******************************************************************************
   *
@@ -40,8 +40,8 @@
 #include "MPU6050.h"
 #include <math.h>
 
-#define start_angle                 1     // degree
-#define limit_angle                 45    // degree
+#define start_angle                 0.1     // degree
+#define limit_angle                 50    // degree
 #define limit_speed                 80    // cm/s
 #define limit_compensate_angle      15    // degree
 
@@ -76,6 +76,7 @@ TIM_HandleTypeDef htim16;
 TIM_HandleTypeDef htim17;
 
 UART_HandleTypeDef huart1;
+DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
 
@@ -87,14 +88,24 @@ float rear_distance = 100;    // assume no obstacle
 uint8_t sr_04_channel = 0;    // 0 = front, 1 = rear
 uint8_t echo_status = 0;   // prevent tim17 over flow  
 
+uint8_t data_uart[10] = {0};
 
 int16_t AccelGyro[6] = {0};                              
 float q1=1, q2=0, q3=0, q4=0;
-__IO float angle;    
+
+// state//
+float angle = 0;    
+float velocity = 0;    
+float position = 0;  
 
 // PID variable //
 
+float posi_ref = 0;
+
 float velo_ref = 0;
+
+float error_posi = 0; 
+float error_posi_dot = 0;
 
 float error_angle = 0; 
 float error_angle_dot = 0;
@@ -105,14 +116,15 @@ float error_velo_dot = 0;
 float kp_angle = 25;
 float kd_angle = 0.56;
 
-float kp_velo = 1;
+float kp_velo = 2;
 float ki_velo = 0.1;
-
+float kd_velo = 1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_ADC_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM3_Init(void);
@@ -147,6 +159,7 @@ void Sampling_isr(void);
 /* USER CODE END 0 */
 
 int main(void)
+
 {
 
   /* USER CODE BEGIN 1 */
@@ -163,6 +176,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC_Init();
   MX_I2C1_Init();
   MX_TIM3_Init();
@@ -174,6 +188,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
   
   A4988_driver_state(DISABLE);    // disable step motor driver
+  
+  HAL_UART_Receive_DMA(&huart1, data_uart, 10);
   
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim14, TIM_CHANNEL_1);
@@ -195,7 +211,7 @@ int main(void)
   {
     SR_04_measuring();    // mesuaring disrance 
     Mesuaring_batt();   // mesuaring battary voltage
-    
+        // read uart data
     HAL_Delay(20);    // dely for 50Hz
   }
   /* USER CODE END 3 */
@@ -382,6 +398,18 @@ void MX_USART1_UART_Init(void)
   huart1.Init.OneBitSampling = UART_ONEBIT_SAMPLING_DISABLED ;
   huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
   HAL_UART_Init(&huart1);
+
+}
+
+/** 
+  * Enable DMA controller clock
+  */
+void MX_DMA_Init(void) 
+{
+  /* DMA controller clock enable */
+  __DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
 
 }
 
@@ -771,6 +799,7 @@ void Sampling_isr(void)
   static float velocity_mR;
   
   static float error_velo_sum;
+  static float error_velo_sum_output; 
   
   // call at 200 Hz
   MPU6050_GetRawAccelGyro(AccelGyro);
@@ -783,8 +812,8 @@ void Sampling_isr(void)
       is_1st_start = 1;
       error_velo_sum = 0;
       velo_from_force = 0;
+      A4988_driver_state(ENABLE);
     }
-    A4988_driver_state(ENABLE);
   }
   if ((angle > limit_angle) || (angle < -limit_angle))
   {
@@ -799,36 +828,44 @@ void Sampling_isr(void)
   count_velo --;
   if (count_velo <= 0)
   {
+    //88888888888888888888 Velocity 888888888888888888888//
+    
     float error_velo_prev = error_velo;
     
     error_velo = velo_ref - velo_from_force; 
-    error_velo_dot = error_velo - error_velo_prev;    // differential of velocity == force
+    error_velo_dot = (error_velo - error_velo_prev) * 50.0f;    // differential of velocity == force
     
-    error_velo_sum += error_velo * 0.02;   // 4 * dt = 4 * 0.005 = 0.02
+
+    error_velo_sum += error_velo * 0.02f;   // 4 * dt = 4 * 0.005 = 0.02
+
     
-    if (error_velo_sum > limit_compensate_angle) error_velo_sum = limit_compensate_angle;    // prevent wildup
-    if (error_velo_sum < -limit_compensate_angle) error_velo_sum = -limit_compensate_angle;    
+    error_velo_sum_output = error_velo_sum * ki_velo; 
     
-    angle_from_velo = (error_velo_dot * kp_velo) + (error_velo_sum * ki_velo);  
+    if (error_velo_sum_output > limit_compensate_angle) error_velo_sum_output = limit_compensate_angle;    // prevent wildup
+    if (error_velo_sum_output < -limit_compensate_angle) error_velo_sum_output = -limit_compensate_angle;    
+
+    //888888888888888888888888888888888888888888888888888// 
+
+    angle_from_velo = ((error_velo * kp_velo) + (error_velo_dot * kd_velo) + (error_velo_sum_output)) * 0.02f;    //  from position control  
+    
     count_velo = 4;
   }
   ////////////////////////////////////
   
-  /*888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888*/
-  
+  /*======================================================================================================*/
+//  angle_from_velo = 0;  // test velocity control
+  /*======================================================================================================*/ 
   ///////////////////////////////////
   // PD controller for angle at 200 Hz
   
   float error_angle_prev = error_angle ;
 
-  error_angle = angle - angle_from_velo; 
-  error_angle_dot = error_angle - error_angle_prev;
+  error_angle = angle - angle_from_velo - 4;    // 4 from unbalance model
+  error_angle_dot = (error_angle - error_angle_prev) ;
   
   velo_from_force += ((error_angle * kp_angle * dt) + (error_angle_dot * kd_angle));    // velocity == integreted of force
   
   ////////////////////////////////////
-  
-  /*888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888*/  
   
   if (velo_from_force > limit_speed) velo_from_force = limit_speed;
   if (velo_from_force < -limit_speed) velo_from_force = -limit_speed; 
@@ -837,7 +874,21 @@ void Sampling_isr(void)
   velocity_mR = velo_from_force;
   
   A4988_driver_output(velocity_mL, velocity_mR);
-
+  
+  ////////////////////////////////////  
+  /*======================================================================================================*/
+  
+  /*======================================================================================================*/ 
+  
+  if (velo_ref == 0)   // if velocity = 0 enable position control
+  {
+    position += velo_from_force * dt;   
+  }
+  else
+  {
+    position = 0;
+  }
+  
 }
 /* USER CODE END 4 */
 
