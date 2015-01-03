@@ -41,8 +41,8 @@
 #include <math.h>
 
 #define start_angle                 0.1     // degree
-#define limit_angle                 50    // degree
-#define limit_speed                 80    // cm/s
+#define limit_angle                 60    // degree
+#define limit_speed                 150    // cm/s
 #define limit_compensate_angle      15    // degree
 
 #define beta                        0.1f     
@@ -116,9 +116,14 @@ float error_velo_dot = 0;
 float kp_angle = 25;
 float kd_angle = 0.56;
 
-float kp_velo = 2;
+float kp_velo = 1.8;
 float ki_velo = 0.1;
-float kd_velo = 1;
+float kd_velo = 1.1;
+float ki_velo_dyna = 0.2;
+
+static float error_velo_sum;
+static float error_velo_sum_dynamic;
+static float error_velo_sum_output; 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -798,8 +803,6 @@ void Sampling_isr(void)
   static float velocity_mL;
   static float velocity_mR;
   
-  static float error_velo_sum;
-  static float error_velo_sum_output; 
   
   // call at 200 Hz
   MPU6050_GetRawAccelGyro(AccelGyro);
@@ -835,9 +838,15 @@ void Sampling_isr(void)
     error_velo = velo_ref - velo_from_force; 
     error_velo_dot = (error_velo - error_velo_prev) * 50.0f;    // differential of velocity == force
     
-
-    error_velo_sum += error_velo * 0.02f;   // 4 * dt = 4 * 0.005 = 0.02
-
+    if (velo_ref == 0)
+    {
+      error_velo_sum += error_velo * 0.02f;   // 4 * dt = 4 * 0.005 = 0.02
+      error_velo_sum_dynamic = 0 ;
+    }
+    else
+    {
+      error_velo_sum_dynamic += error_velo * 0.02f;
+    }
     
     error_velo_sum_output = error_velo_sum * ki_velo; 
     
@@ -846,7 +855,8 @@ void Sampling_isr(void)
 
     //888888888888888888888888888888888888888888888888888// 
 
-    angle_from_velo = ((error_velo * kp_velo) + (error_velo_dot * kd_velo) + (error_velo_sum_output)) * 0.02f;    //  from position control  
+    angle_from_velo = ((error_velo * kp_velo) + (error_velo_dot * kd_velo) + 
+                      (error_velo_sum_output) + (error_velo_sum_dynamic * ki_velo_dyna)) * 0.02f;    //  from position control  
     
     count_velo = 4;
   }
@@ -855,6 +865,10 @@ void Sampling_isr(void)
   /*======================================================================================================*/
 //  angle_from_velo = 0;  // test velocity control
   /*======================================================================================================*/ 
+  
+  if (Battery_voltage < 10) angle_from_velo = 0;    // battery protection
+  if (front_distance  < 30 && rear_distance > 30) angle_from_velo = -2 ;
+  if (rear_distance  < 30 && front_distance > 30) angle_from_velo = 2 ;
   ///////////////////////////////////
   // PD controller for angle at 200 Hz
   
@@ -870,6 +884,8 @@ void Sampling_isr(void)
   if (velo_from_force > limit_speed) velo_from_force = limit_speed;
   if (velo_from_force < -limit_speed) velo_from_force = -limit_speed; 
   
+
+  
   velocity_mL = velo_from_force;
   velocity_mR = velo_from_force;
   
@@ -877,18 +893,6 @@ void Sampling_isr(void)
   
   ////////////////////////////////////  
   /*======================================================================================================*/
-  
-  /*======================================================================================================*/ 
-  
-  if (velo_ref == 0)   // if velocity = 0 enable position control
-  {
-    position += velo_from_force * dt;   
-  }
-  else
-  {
-    position = 0;
-  }
-  
 }
 /* USER CODE END 4 */
 
