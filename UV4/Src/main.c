@@ -96,7 +96,7 @@ float error_dot = 0;
 float ref = 4;
 float ref_dot = 0;
 float kp_1 = 25;
-float kd_1 = 0;
+float kd_1 = 0.56;
 
 float kp_2 = 0;
 float ki_2 = 0;
@@ -657,12 +657,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
       if (sr_04_channel)
       {
 //        rear_distance = tmp_distance;
-        rear_distance = Smooth_filter(0.3f, tmp_distance, rear_distance);
+        rear_distance = Smooth_filter(0.1f, tmp_distance, rear_distance);
       }
       else
       {
 //        front_distance = tmp_distance;
-        front_distance = Smooth_filter(0.3f, tmp_distance, front_distance);
+        front_distance = Smooth_filter(0.1f, tmp_distance, front_distance);
       }
     }
     else
@@ -699,9 +699,6 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
     velocity_mR_tmp = -velocity_mR_tmp;
   }
   
-//  velocity_mL_tmp *= dt;
-//  velocity_mR_tmp *= dt;
-  
   // calculate period * 149.7927 pulse / 1 cm *
   
   float period_L = (float)clock_cnt * (float)inv_cm2pulse / (float)velocity_mL_tmp;
@@ -718,8 +715,9 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
     {
       TIM14 -> ARR = period_L;
       TIM14 -> CCR1 = period_L * 0.5f;
+//      if (velocity_mL_tmp < 0.15f) TIM14 -> CCR1 = period_L + 1;    // add zero velocity
       TIM14 -> CNT = 0;   //reset counter register tim14
-      count_mL = 4;
+      count_mL = 8;
     }
   }
   else     // 200 Hz min 1.3352 cm/s
@@ -738,8 +736,9 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
     {
       TIM3 -> ARR = period_R;
       TIM3 -> CCR1 = period_R * 0.5f;
+//      if (velocity_mR_tmp < 0.15f) TIM3 -> CCR1 = period_R + 1;    // add zero velocity
       TIM3 -> CNT = 0;    //reset counter register tim3
-      count_mR = 4;
+      count_mR = 8;
     }
   }
   else     // 200 Hz min 1.3352 cm/s
