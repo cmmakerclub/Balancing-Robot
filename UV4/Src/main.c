@@ -40,7 +40,8 @@
 #include "MPU6050.h"
 #include <math.h>
 
-#define limit_angle                 30    // degree
+#define start_angle                 1     // degree
+#define limit_angle                 45    // degree
 #define limit_speed                 80    // cm/s
 
 #define beta                        0.1f     
@@ -91,15 +92,20 @@ float q1=1, q2=0, q3=0, q4=0;
 __IO float angle;    
 
 // PID variable //
-float error = 0; 
-float error_dot = 0;
-float ref = 4;
-float ref_dot = 0;
-float kp_1 = 25;
-float kd_1 = 0.56;
+float error_angle = 0; 
+float error_angle_dot = 0;
 
-float kp_2 = 0;
-float ki_2 = 0;
+float error_velo = 0; 
+float error_velo_dot = 0;
+
+float velo_ref = 0;
+float velo_ref_dot = 0;
+
+float kp_angle = 25;
+float kd_angle = 0.56;
+
+float kp_velo = 0;
+float ki_velo = 0;
 
 /* USER CODE END PV */
 
@@ -756,38 +762,65 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
 
 void Sampling_isr(void)
 {
+  static int8_t count_velo;
+  static float angle_from_velo; 
+  static float velo_from_force;
+  static float velocity_mL;
+  static float velocity_mR;
+  static float error_velo_sum;
   
-  static float integral_F;
   // call at 200 Hz
   MPU6050_GetRawAccelGyro(AccelGyro);
   Ahrs();
-  
 
-  if ((angle < ref+1) &&(angle > ref-1))
+  if ((angle < start_angle) && (angle > -start_angle))
   {
+    velo_from_force = 0;
     A4988_driver_state(ENABLE);
   }
   if ((angle > limit_angle) || (angle < -limit_angle))
   {
     A4988_driver_state(DISABLE);
-    integral_F = 0;
   }
 
+  ////////////////////////////////////
+  // PI controller for Velocity at 50 Hz
+  count_velo --;
+  if (count_velo <= 0)
+  {
+    float error_velo_prev = error_velo;
+    
+    error_velo = velo_ref - velo_from_force; 
+    error_velo_dot = error_velo - error_velo_prev;    // differential of velocity == force
+    
+    error_velo_sum += error_velo * 0.02;   // 4 * dt = 4 * 0.005 = 0.02
+    
+    angle_from_velo = (error_velo_dot * kp_velo) + (error_velo_sum * ki_velo);  
+      
+    count_velo = 4;
+  }
+  ////////////////////////////////////
   
   
-  // PD controller 
+  ///////////////////////////////////
+  // PD controller for angle at 200 Hz
   
-  float error_prev = error ;
+  float error_angle_prev = error_angle ;
 
-  error = angle - ref; 
-  error_dot = error - error_prev;
+  error_angle = angle - angle_from_velo; 
+  error_angle_dot = error_angle - error_angle_prev;
   
-  integral_F += ((error * kp_1 * dt) + (error_dot * kd_1));
-  debug = integral_F;
+  velo_from_force += ((error_angle * kp_angle * dt) + (error_angle_dot * kd_angle));    // velocity == integreted of force
   
-  if (integral_F > limit_speed) integral_F = limit_speed;
-  if (integral_F < -limit_speed) integral_F = -limit_speed; 
-  A4988_driver_output(integral_F, integral_F);
+  ////////////////////////////////////
+  
+  if (velo_from_force > limit_speed) velo_from_force = limit_speed;
+  if (velo_from_force < -limit_speed) velo_from_force = -limit_speed; 
+  
+  velocity_mL = velo_from_force;
+  velocity_mR = velo_from_force;
+  
+  A4988_driver_output(velocity_mL, velocity_mR);
 
 }
 /* USER CODE END 4 */
