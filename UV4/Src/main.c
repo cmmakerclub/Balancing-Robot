@@ -43,6 +43,7 @@
 #define start_angle                 1     // degree
 #define limit_angle                 45    // degree
 #define limit_speed                 80    // cm/s
+#define limit_compensate_angle      15    // degree
 
 #define beta                        0.1f     
 #define ACCELEROMETER_SENSITIVITY   16384.0f  
@@ -92,20 +93,20 @@ float q1=1, q2=0, q3=0, q4=0;
 __IO float angle;    
 
 // PID variable //
+
+float velo_ref = 0;
+
 float error_angle = 0; 
 float error_angle_dot = 0;
 
 float error_velo = 0; 
 float error_velo_dot = 0;
 
-float velo_ref = 0;
-float velo_ref_dot = 0;
-
 float kp_angle = 25;
 float kd_angle = 0.56;
 
-float kp_velo = 0;
-float ki_velo = 0;
+float kp_velo = 1;
+float ki_velo = 0.1;
 
 /* USER CODE END PV */
 
@@ -762,11 +763,13 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
 
 void Sampling_isr(void)
 {
+  static int8_t is_1st_start;
   static int8_t count_velo;
   static float angle_from_velo; 
   static float velo_from_force;
   static float velocity_mL;
   static float velocity_mR;
+  
   static float error_velo_sum;
   
   // call at 200 Hz
@@ -775,14 +778,22 @@ void Sampling_isr(void)
 
   if ((angle < start_angle) && (angle > -start_angle))
   {
-    velo_from_force = 0;
+    if (!is_1st_start)
+    {
+      is_1st_start = 1;
+      error_velo_sum = 0;
+      velo_from_force = 0;
+    }
     A4988_driver_state(ENABLE);
   }
   if ((angle > limit_angle) || (angle < -limit_angle))
   {
+    is_1st_start = 0;
     A4988_driver_state(DISABLE);
   }
 
+  /*888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888*/
+  
   ////////////////////////////////////
   // PI controller for Velocity at 50 Hz
   count_velo --;
@@ -795,12 +806,15 @@ void Sampling_isr(void)
     
     error_velo_sum += error_velo * 0.02;   // 4 * dt = 4 * 0.005 = 0.02
     
+    if (error_velo_sum > limit_compensate_angle) error_velo_sum = limit_compensate_angle;    // prevent wildup
+    if (error_velo_sum < -limit_compensate_angle) error_velo_sum = -limit_compensate_angle;    
+    
     angle_from_velo = (error_velo_dot * kp_velo) + (error_velo_sum * ki_velo);  
-      
     count_velo = 4;
   }
   ////////////////////////////////////
   
+  /*888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888*/
   
   ///////////////////////////////////
   // PD controller for angle at 200 Hz
@@ -813,6 +827,8 @@ void Sampling_isr(void)
   velo_from_force += ((error_angle * kp_angle * dt) + (error_angle_dot * kd_angle));    // velocity == integreted of force
   
   ////////////////////////////////////
+  
+  /*888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888*/  
   
   if (velo_from_force > limit_speed) velo_from_force = limit_speed;
   if (velo_from_force < -limit_speed) velo_from_force = -limit_speed; 
