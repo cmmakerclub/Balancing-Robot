@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : stm32f0xx_hal_msp.c
-  * Date               : 03/01/2015 17:31:16
+  * Date               : 03/01/2015 23:26:25
   * Description        : This file provides code for the MSP Initialization 
   *                      and de-Initialization codes.
   ******************************************************************************
@@ -356,7 +356,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     __HAL_LINKDMA(huart,hdmarx,hdma_usart1_rx);
 
   /* USER CODE BEGIN USART1_MspInit 1 */
-
+  
   /* USER CODE END USART1_MspInit 1 */
   }
 

@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    stm32f0xx_it.c
-  * @date    03/01/2015 17:31:16
+  * @date    03/01/2015 23:26:24
   * @brief   Interrupt Service Routines.
   ******************************************************************************
   *
@@ -43,6 +43,7 @@ extern void Sampling_isr(void);
 /* External variables --------------------------------------------------------*/
 
 extern TIM_HandleTypeDef htim16;
+extern DMA_HandleTypeDef hdma_usart1_rx;
 
 /******************************************************************************/
 /*            Cortex-M0 Processor Interruption and Exception Handlers         */ 
@@ -60,6 +61,19 @@ void EXTI0_1_IRQHandler(void)
   /* USER CODE BEGIN EXTI0_1_IRQn 1 */
 
   /* USER CODE END EXTI0_1_IRQn 1 */
+}
+
+/**
+* @brief This function handles DMA1 Channel 2 and Channel 3 Interrupts.
+*/
+void DMA1_Channel2_3_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Channel2_3_IRQn 0 */
+
+  /* USER CODE END DMA1_Channel2_3_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart1_rx);
+
+  /* USER CODE END DMA1_Channel2_3_IRQn 1 */
 }
 
 /**

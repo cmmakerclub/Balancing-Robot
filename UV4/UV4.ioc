@@ -1,5 +1,5 @@
 #MicroXplorer Configuration settings - do not modify
-#Sat Jan 03 17:31:16 ICT 2015
+#Sat Jan 03 23:26:24 ICT 2015
 ADC.Channel=ADC_CHANNEL_1
 ADC.Channel-0\#ChannelRegularConversion=ADC_CHANNEL_1
 ADC.DiscontinuousConvMode=ENABLE
@@ -58,6 +58,7 @@ Mcu.Pin9=PA7
 Mcu.PinsNb=19
 Mcu.UserName=STM32F030F4Px
 MxCube.Version=4.5.0
+NVIC.DMA1_Channel2_3_IRQn=true\:2\:0\:true
 NVIC.EXTI0_1_IRQn=true\:0\:0\:false
 NVIC.SysTick_IRQn=true\:0\:0\:false
 NVIC.TIM16_IRQn=true\:1\:0\:true
@@ -188,7 +189,7 @@ SH.S_TIM3_CH1.0=TIM3_CH1,PWM Generation1 CH1
 SH.S_TIM3_CH1.ConfNb=1
 TIM14.IPParameters=Pulse-PWM Generation1 CH1,Period,Prescaler
 TIM14.Period=1000
-TIM14.Prescaler=47
+TIM14.Prescaler=23
 TIM14.Pulse-PWM\ Generation1\ CH1=1001
 TIM16.IPParameters=Period,Prescaler
 TIM16.Period=499
@@ -198,7 +199,7 @@ TIM17.Period=0xffff
 TIM17.Prescaler=47
 TIM3.IPParameters=Pulse-PWM Generation1 CH1,Period,Prescaler
 TIM3.Period=1000
-TIM3.Prescaler=47
+TIM3.Prescaler=23
 TIM3.Pulse-PWM\ Generation1\ CH1=1001
 USART1.BaudRate=9600
 USART1.IPParameters=BaudRate
