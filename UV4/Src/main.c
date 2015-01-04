@@ -36,7 +36,7 @@
 #include "stm32f0xx_hal.h"
 
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
 #include "MPU6050.h"
 #include <math.h>
 
@@ -88,12 +88,14 @@ float rear_distance = 100;    // assume no obstacle
 uint8_t sr_04_channel = 0;    // 0 = front, 1 = rear
 uint8_t echo_status = 0;   // prevent tim17 over flow  
 
+char uart_data_sent[20] = "Hell0.. ^^\n";
 int8_t raw_data_uart[10] = {0};
 int8_t ch1, ch2, ch3, ch4;
 int8_t uart_watchdog = 0;
 
 int16_t AccelGyro[6] = {0};                              
 float q1=1, q2=0, q3=0, q4=0;
+float L_R_ref_filted ;
 
 // state//
 float angle = 0;    
@@ -105,6 +107,7 @@ float position = 0;
 float posi_ref = 0;
 
 float velo_ref = 0;
+float L_R_ref = 0;
 
 float error_posi = 0; 
 float error_posi_dot = 0;
@@ -118,10 +121,15 @@ float error_velo_dot = 0;
 float kp_angle = 25;
 float kd_angle = 0.56;
 
-float kp_velo = 1.8;
-float ki_velo = 0.05;
-float kd_velo = 1.1;
-float ki_velo_dyna = 0.2;
+//float kp_velo = 1.8;
+//float ki_velo = 0.05;
+//float kd_velo = 1.1;
+//float ki_velo_dyna = 0.2;
+
+float kp_velo = 3;
+float ki_velo = 5;
+float kd_velo = 0;
+float ki_velo_dyna = 7;
 
 static float error_velo_sum;
 static float error_velo_sum_dynamic;
@@ -215,15 +223,18 @@ int main(void)
   /* Infinite loop */
   while (1)
   {
+    HAL_UART_Transmit(&huart1, (uint8_t *)uart_data_sent, 20, 5);
     SR_04_measuring();    // mesuaring disrance 
     Mesuaring_batt();   // mesuaring battary voltage
     if (uart_watchdog != 0)
     {
-      velo_ref = (float)ch2 * 0.3f ;
+      velo_ref = (float)ch2 * 0.3f;
+      L_R_ref = (float)ch1 / 25.0f;
     }
     else
     {
       velo_ref = 0;
+      L_R_ref = 0;
     }
     
     if (uart_watchdog > 0) uart_watchdog --;    
@@ -815,7 +826,7 @@ void Sampling_isr(void)
   static float velo_from_force;
   static float velocity_mL;
   static float velocity_mR;
-  static int16_t count_un_integrate =0;
+  static int32_t count_un_integrate = 0;
   
   // call at 200 Hz
   MPU6050_GetRawAccelGyro(AccelGyro);
@@ -846,32 +857,36 @@ void Sampling_isr(void)
   {
     //88888888888888888888 Velocity 888888888888888888888//
     
-    float error_velo_prev = error_velo;
-    
+//   float error_velo_prev = error_velo;
     error_velo = velo_ref - velo_from_force; 
-    error_velo_dot = (error_velo - error_velo_prev) * 50.0f;    // differential of velocity == force
+//   error_velo_dot = (error_velo - error_velo_prev) * 50.0f ;    // differential of velocity == force
     
-
-    if (velo_ref == 0 && count_un_integrate == 0)
+    if (count_un_integrate <= 0)
     {
-      error_velo_sum += error_velo * 0.02f;   // 4 * dt = 4 * 0.005 = 0.02
-      error_velo_sum_dynamic = 0 ;
+      if (velo_ref == 0)
+      {
+        error_velo_sum += error_velo * 0.02f;   // 4 * dt = 4 * 0.005 = 0.02
+        error_velo_sum_dynamic = 0;
+      }
+      else
+      {
+        error_velo_sum_dynamic += error_velo * 0.02f;
+      }
     }
-    else
-    {
-      //error_velo_sum_dynamic += error_velo * 0.02f;
-    }
+    
     if (count_un_integrate > 0) count_un_integrate --;
     
-    error_velo_sum_output = error_velo_sum * ki_velo; 
+    
+    error_velo_sum_output = error_velo_sum * ki_velo + error_velo_sum_dynamic * ki_velo_dyna; 
     
     if (error_velo_sum_output > limit_compensate_angle) error_velo_sum_output = limit_compensate_angle;    // prevent wildup
     if (error_velo_sum_output < -limit_compensate_angle) error_velo_sum_output = -limit_compensate_angle;    
 
     //888888888888888888888888888888888888888888888888888// 
 
-    angle_from_velo = ((error_velo * kp_velo) + (error_velo_dot * kd_velo) + 
-                      (error_velo_sum_output) + (error_velo_sum_dynamic * ki_velo_dyna)) * 0.02f;    //  from position control  
+    angle_from_velo = ((error_velo * kp_velo) + 
+                       (error_velo_sum_output) + (error_velo_sum_dynamic * ki_velo_dyna)) * 0.01f; 
+   
     
     count_velo = 4;
   }
@@ -885,12 +900,12 @@ void Sampling_isr(void)
   if (front_distance  < 30 && rear_distance > 30) 
   {
     angle_from_velo = -2 ;
-    count_un_integrate = 400;   // 800 == 8 sec
+    count_un_integrate = 500;   // 800 == 8 sec
   }
   if (rear_distance  < 30 && front_distance > 30)
   {
     angle_from_velo = 2 ;
-    count_un_integrate = 400;
+    count_un_integrate = 500;
   }
   
   ///////////////////////////////////
@@ -898,7 +913,7 @@ void Sampling_isr(void)
   
   float error_angle_prev = error_angle ;
 
-  error_angle = angle - angle_from_velo - 4;    // 4 from unbalance model
+  error_angle = angle - angle_from_velo - 5;    // 5 from unbalance model
   error_angle_dot = (error_angle - error_angle_prev) ;
   
   velo_from_force += ((error_angle * kp_angle * dt) + (error_angle_dot * kd_angle));    // velocity == integreted of force
@@ -908,10 +923,14 @@ void Sampling_isr(void)
   if (velo_from_force > limit_speed) velo_from_force = limit_speed;
   if (velo_from_force < -limit_speed) velo_from_force = -limit_speed; 
   
-
+  L_R_ref_filted = Smooth_filter(0.05, L_R_ref, L_R_ref_filted);
   
-  velocity_mL = velo_from_force;
-  velocity_mR = velo_from_force;
+
+  velocity_mL = velo_from_force - L_R_ref_filted;
+  velocity_mR = velo_from_force + L_R_ref_filted;
+
+//  velocity_mL = + L_R_ref;
+//  velocity_mR =- L_R_ref;
   
   A4988_driver_output(velocity_mL, velocity_mR);
   
