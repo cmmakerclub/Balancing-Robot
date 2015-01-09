@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 04/01/2015 03:22:40
+  * Date               : 06/01/2015 17:24:27
   * Description        : Main program body
   ******************************************************************************
   *
@@ -41,8 +41,8 @@
 #include <math.h>
 
 #define start_angle                 0.1     // degree
-#define limit_angle                 60    // degree
-#define limit_speed                 150    // cm/s
+#define limit_angle                 30    // degree
+#define limit_speed                 100    // cm/s
 #define limit_compensate_angle      15    // degree
 
 #define beta                        0.1f     
@@ -50,18 +50,18 @@
 #define GYROSCOPE_SENSITIVITY       0.007629510948f    // 1/131.07f  
 #define M_PI                        3.14159265359f	    
 
-#define clock_cnt                   2000000.0f
+#define clock_cnt                   100000.0f
 #define dt                          0.005f
 #define sampling                    200
 
-#define inv_cm2pulse                    0.006675883837f
+#define inv_cm2pulse                0.006675883837f
 
 #define data2voltage                0.00332992f
 #define deg2rad                     0.0174532925f
 #define rad2deg                     57.29577951f
 #define gx_diff                     34    // x axis gyro diff
 #define gy_diff                     41    // y axis gyro diff
-#define gz_diff                     156    // z axis gyro diff
+#define gz_diff                     156   // z axis gyro diff
 
 /* USER CODE END Includes */
 
@@ -88,7 +88,7 @@ float rear_distance = 100;    // assume no obstacle
 uint8_t sr_04_channel = 0;    // 0 = front, 1 = rear
 uint8_t echo_status = 0;   // prevent tim17 over flow  
 
-char uart_data_sent[20] = "Hell0.. ^^\n";
+
 int8_t raw_data_uart[10] = {0};
 int8_t ch1, ch2, ch3, ch4;
 int8_t uart_watchdog = 0;
@@ -126,8 +126,8 @@ float kd_angle = 0.56;
 //float kd_velo = 1.1;
 //float ki_velo_dyna = 0.2;
 
-float kp_velo = 3;
-float ki_velo = 5;
+float kp_velo = 0.1;
+float ki_velo = 0.001;
 float kd_velo = 0;
 float ki_velo_dyna = 7;
 
@@ -164,9 +164,9 @@ float Smooth_filter(float alfa, float new_data, float prev_data);
 void SR_04_measuring(void);
 void Mesuaring_batt(void);
 void Sampling_isr(void);
+void Print_BLE(void);
+void Print_Debug(void);
 
-void DMA_callback(struct __DMA_HandleTypeDef *hdma);
-void DMA_callback_1(void);
 
 
 /* USER CODE END PFP */
@@ -205,8 +205,8 @@ int main(void)
   
   A4988_driver_state(DISABLE);    // disable step motor driver
   
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim14, TIM_CHANNEL_1);
+  HAL_TIM_Base_Start_IT(&htim3);
+  HAL_TIM_Base_Start_IT(&htim14);
 
   HAL_TIM_Base_Start(&htim17);   // start iuput capture for SR-04 module
   
@@ -223,13 +223,12 @@ int main(void)
   /* Infinite loop */
   while (1)
   {
-    HAL_UART_Transmit(&huart1, (uint8_t *)uart_data_sent, 20, 5);
     SR_04_measuring();    // mesuaring disrance 
     Mesuaring_batt();   // mesuaring battary voltage
     if (uart_watchdog != 0)
     {
-      velo_ref = (float)ch2 * 0.3f;
-      L_R_ref = (float)ch1 / 25.0f;
+      velo_ref = (float)ch2 * 0.4f;
+      L_R_ref = (float)ch1 * 0.04f;
     }
     else
     {
@@ -317,7 +316,7 @@ void MX_I2C1_Init(void)
 {
 
   hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x0000020B;
+  hi2c1.Init.Timing = 0x2000090E;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLED;
@@ -337,25 +336,12 @@ void MX_I2C1_Init(void)
 void MX_TIM3_Init(void)
 {
 
-  TIM_MasterConfigTypeDef sMasterConfig;
-  TIM_OC_InitTypeDef sConfigOC;
-
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 23;
+  htim3.Init.Prescaler = 239;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 1000;
+  htim3.Init.Period = 65535;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  HAL_TIM_PWM_Init(&htim3);
-
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig);
-
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 1001;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1);
+  HAL_TIM_Base_Init(&htim3);
 
 }
 
@@ -363,22 +349,12 @@ void MX_TIM3_Init(void)
 void MX_TIM14_Init(void)
 {
 
-  TIM_OC_InitTypeDef sConfigOC;
-
   htim14.Instance = TIM14;
-  htim14.Init.Prescaler = 23;
+  htim14.Init.Prescaler = 239;
   htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim14.Init.Period = 1000;
+  htim14.Init.Period = 65535;
   htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   HAL_TIM_Base_Init(&htim14);
-
-  HAL_TIM_PWM_Init(&htim14);
-
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 1001;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  HAL_TIM_PWM_ConfigChannel(&htim14, &sConfigOC, TIM_CHANNEL_1);
 
 }
 
@@ -415,7 +391,8 @@ void MX_USART1_UART_Init(void)
 {
 
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 9600;
+//  huart1.Init.BaudRate = 9600;    // for ble
+  huart1.Init.BaudRate = 115200;    // for debug
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -437,8 +414,6 @@ void MX_DMA_Init(void)
   __DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
-  HAL_NVIC_SetPriority(DMA1_Channel4_5_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel4_5_IRQn);
 
 }
 
@@ -472,8 +447,8 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PA4 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4;
+  /*Configure GPIO pins : PA4 PA6 PA7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_6|GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
@@ -520,7 +495,7 @@ void Initial_MPU6050(void)
   MPU6050_WriteBit(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_INT_ENABLE, MPU6050_INTERRUPT_DATA_RDY_BIT, ENABLE);
 
   //		SetDLPF(MPU6050_DLPF_BW_5)
-  MPU6050_WriteBits(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_CONFIG, MPU6050_CFG_DLPF_CFG_BIT, MPU6050_CFG_DLPF_CFG_LENGTH, MPU6050_DLPF_BW_98);
+  MPU6050_WriteBits(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_CONFIG, MPU6050_CFG_DLPF_CFG_BIT, MPU6050_CFG_DLPF_CFG_LENGTH, MPU6050_DLPF_BW_42);
  
   //    SetSleepModeStatus(DISABLE)
   MPU6050_WriteBit(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, DISABLE);
@@ -739,8 +714,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
 {
-  static int8_t count_mL;
-  static int8_t count_mR;  
   // write direction pin left motor
   if (velocity_mL_tmp > 0)
   {
@@ -772,50 +745,13 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
   if (period_R > 65535) period_R = 65535; 
   
   // Motor L
-  if (velocity_mL_tmp < 2.67)    // 50 Hz min 0.3338 cm/s
-  {
-    count_mL--;
-    if (count_mL <= 0)
-    {
-      TIM14 -> ARR = period_L;
-      TIM14 -> CCR1 = period_L * 0.5f;
-//      if (velocity_mL_tmp < 0.15f) TIM14 -> CCR1 = period_L + 1;    // add zero velocity
-      TIM14 -> CNT = 0;   //reset counter register tim14
-      count_mL = 8;
-    }
-  }
-  else     // 200 Hz min 1.3352 cm/s
-  {
     TIM14 -> ARR = period_L;
-    TIM14 -> CCR1 = period_L * 0.5f;
-    TIM14 -> CNT = 0;   //reset counter register tim14
-    count_mL = 0;
-  }
+    if ( TIM14 -> CNT > TIM14 -> ARR) TIM14 -> CNT = period_L * 0.9f;   //reset counter register tim14
   
   // Motor R
-  if (velocity_mR_tmp < 2.67)    // 50 Hz min 0.3338 cm/s
-  {
-    count_mR--;
-    if (count_mR <= 0)
-    {
-      TIM3 -> ARR = period_R;
-      TIM3 -> CCR1 = period_R * 0.5f;
-//      if (velocity_mR_tmp < 0.15f) TIM3 -> CCR1 = period_R + 1;    // add zero velocity
-      TIM3 -> CNT = 0;    //reset counter register tim3
-      count_mR = 8;
-    }
-  }
-  else     // 200 Hz min 1.3352 cm/s
-  {
     TIM3 -> ARR = period_R;
-    TIM3 -> CCR1 = period_R * 0.5f;
-    TIM3 -> CNT = 0;    //reset counter register tim3
-    count_mR = 0;
-  }
+    if ( TIM3 -> CNT > TIM3 -> ARR) TIM3 -> CNT = period_L * 0.9f;    //reset counter register tim3
 
-
-
-  
 }
 
 void Sampling_isr(void)
@@ -856,13 +792,12 @@ void Sampling_isr(void)
   if (count_velo <= 0)
   {
     //88888888888888888888 Velocity 888888888888888888888//
-    
-//   float error_velo_prev = error_velo;
+
+    float error_velo_prev = error_velo;
     error_velo = velo_ref - velo_from_force; 
-//   error_velo_dot = (error_velo - error_velo_prev) * 50.0f ;    // differential of velocity == force
+    error_velo_dot = (error_velo - error_velo_prev) * 50.0f ;    // differential of velocity == force
     
-    if (count_un_integrate <= 0)
-    {
+
       if (velo_ref == 0)
       {
         error_velo_sum += error_velo * 0.02f;   // 4 * dt = 4 * 0.005 = 0.02
@@ -884,12 +819,11 @@ void Sampling_isr(void)
 
     //888888888888888888888888888888888888888888888888888// 
 
-    angle_from_velo = ((error_velo * kp_velo) + 
-                       (error_velo_sum_output) + (error_velo_sum_dynamic * ki_velo_dyna)) * 0.01f; 
+    angle_from_velo = (error_velo_dot * kp_velo) + (error_velo_sum_output); 
    
-    
-    count_velo = 4;
-  }
+    if (angle_from_velo > 10) angle_from_velo = 10;
+    if (angle_from_velo < -10) angle_from_velo = -10;
+
   ////////////////////////////////////
   
   /*======================================================================================================*/
@@ -897,12 +831,12 @@ void Sampling_isr(void)
   /*======================================================================================================*/ 
   
   if (Battery_voltage < 10) angle_from_velo = 0;    // battery protection
-  if (front_distance  < 30 && rear_distance > 30) 
+  if (front_distance  < 30 && rear_distance > 30 && uart_watchdog > 0) 
   {
     angle_from_velo = -2 ;
     count_un_integrate = 500;   // 800 == 8 sec
   }
-  if (rear_distance  < 30 && front_distance > 30)
+  if (rear_distance  < 30 && front_distance > 30 && uart_watchdog > 0)
   {
     angle_from_velo = 2 ;
     count_un_integrate = 500;
@@ -913,7 +847,7 @@ void Sampling_isr(void)
   
   float error_angle_prev = error_angle ;
 
-  error_angle = angle - angle_from_velo - 5;    // 5 from unbalance model
+  error_angle = angle - angle_from_velo - 2.7f;    // 2.7f from unbalance mass
   error_angle_dot = (error_angle - error_angle_prev) ;
   
   velo_from_force += ((error_angle * kp_angle * dt) + (error_angle_dot * kd_angle));    // velocity == integreted of force
@@ -923,17 +857,29 @@ void Sampling_isr(void)
   if (velo_from_force > limit_speed) velo_from_force = limit_speed;
   if (velo_from_force < -limit_speed) velo_from_force = -limit_speed; 
   
-  L_R_ref_filted = Smooth_filter(0.05, L_R_ref, L_R_ref_filted);
+  L_R_ref_filted = Smooth_filter(0.1, L_R_ref, L_R_ref_filted);
   
-
-  velocity_mL = velo_from_force - L_R_ref_filted;
-  velocity_mR = velo_from_force + L_R_ref_filted;
-
-//  velocity_mL = + L_R_ref;
-//  velocity_mR =- L_R_ref;
+  if (velo_from_force >= 0) 
+  {
+    velocity_mL = velo_from_force - L_R_ref_filted;
+    velocity_mR = velo_from_force + L_R_ref_filted;
+  }
+  else
+  {
+    velocity_mL = velo_from_force + L_R_ref_filted;
+    velocity_mR = velo_from_force - L_R_ref_filted;
+  }
+  
+//    velocity_mL = velo_from_force - L_R_ref_filted;
+//    velocity_mR = velo_from_force + L_R_ref_filted;
+  
+  velocity = velo_from_force;
+  position +=  velo_from_force * dt;
   
   A4988_driver_output(velocity_mL, velocity_mR);
   
+  
+  Print_Debug();
   ////////////////////////////////////  
   /*======================================================================================================*/
 }
@@ -959,6 +905,23 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
   
   uart_watchdog = 25;     // Reset watchdog timer
 }
+void Print_BLE(void)
+{
+  
+}
+
+void Print_Debug(void)
+{
+  uint8_t header[2] = {0x7e, 0x7e};
+  uint8_t terminator[2] = {0xe7, 0xe7};
+  HAL_UART_Transmit(&huart1, header, 2, 1);    // sent header
+  HAL_UART_Transmit(&huart1, (uint8_t *)&velocity, 4, 1);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&angle, 4, 1);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&position, 4, 1);
+  HAL_UART_Transmit(&huart1, terminator, 2, 1);    // sent header
+}
+
+
 /* USER CODE END 4 */
 
 #ifdef USE_FULL_ASSERT

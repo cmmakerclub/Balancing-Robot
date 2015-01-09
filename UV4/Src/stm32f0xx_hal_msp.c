@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : stm32f0xx_hal_msp.c
-  * Date               : 04/01/2015 03:22:40
+  * Date               : 06/01/2015 17:24:26
   * Description        : This file provides code for the MSP Initialization 
   *                      and de-Initialization codes.
   ******************************************************************************
@@ -163,28 +163,19 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef* hi2c)
 
 }
 
-void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef* htim_pwm)
+void HAL_TIM_OnePulse_MspInit(TIM_HandleTypeDef* htim_onepulse)
 {
 
-  GPIO_InitTypeDef GPIO_InitStruct;
-  if(htim_pwm->Instance==TIM3)
+  if(htim_onepulse->Instance==TIM3)
   {
   /* USER CODE BEGIN TIM3_MspInit 0 */
 
   /* USER CODE END TIM3_MspInit 0 */
     /* Peripheral clock enable */
     __TIM3_CLK_ENABLE();
-  
-    /**TIM3 GPIO Configuration    
-    PA6     ------> TIM3_CH1 
-    */
-    GPIO_InitStruct.Pin = GPIO_PIN_6;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-    GPIO_InitStruct.Alternate = GPIO_AF1_TIM3;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
+  /* System interrupt init*/
+    HAL_NVIC_SetPriority(TIM3_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(TIM3_IRQn);
   /* USER CODE BEGIN TIM3_MspInit 1 */
 
   /* USER CODE END TIM3_MspInit 1 */
@@ -194,8 +185,14 @@ void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef* htim_pwm)
 
 void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
 {
+  if(htim_base->Instance==TIM3)
+  {
+    __TIM3_CLK_ENABLE();
+    
+    HAL_NVIC_SetPriority(TIM3_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(TIM3_IRQn);
+  }
 
-  GPIO_InitTypeDef GPIO_InitStruct;
   if(htim_base->Instance==TIM14)
   {
   /* USER CODE BEGIN TIM14_MspInit 0 */
@@ -203,17 +200,9 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
   /* USER CODE END TIM14_MspInit 0 */
     /* Peripheral clock enable */
     __TIM14_CLK_ENABLE();
-  
-    /**TIM14 GPIO Configuration    
-    PA7     ------> TIM14_CH1 
-    */
-    GPIO_InitStruct.Pin = GPIO_PIN_7;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-    GPIO_InitStruct.Alternate = GPIO_AF4_TIM14;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
+  /* System interrupt init*/
+    HAL_NVIC_SetPriority(TIM14_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(TIM14_IRQn);
   /* USER CODE BEGIN TIM14_MspInit 1 */
 
   /* USER CODE END TIM14_MspInit 1 */
@@ -226,7 +215,7 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
     /* Peripheral clock enable */
     __TIM16_CLK_ENABLE();
   /* System interrupt init*/
-    HAL_NVIC_SetPriority(TIM16_IRQn, 1, 0);
+    HAL_NVIC_SetPriority(TIM16_IRQn, 2, 0);
     HAL_NVIC_EnableIRQ(TIM16_IRQn);
   /* USER CODE BEGIN TIM16_MspInit 1 */
 
@@ -246,21 +235,19 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
 
 }
 
-void HAL_TIM_PWM_MspDeInit(TIM_HandleTypeDef* htim_pwm)
+void HAL_TIM_OnePulse_MspDeInit(TIM_HandleTypeDef* htim_onepulse)
 {
 
-  if(htim_pwm->Instance==TIM3)
+  if(htim_onepulse->Instance==TIM3)
   {
   /* USER CODE BEGIN TIM3_MspDeInit 0 */
 
   /* USER CODE END TIM3_MspDeInit 0 */
     /* Peripheral clock disable */
     __TIM3_CLK_DISABLE();
-  
-    /**TIM3 GPIO Configuration    
-    PA6     ------> TIM3_CH1 
-    */
-    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_6);
+
+    /* Peripheral interrupt DeInit*/
+    HAL_NVIC_DisableIRQ(TIM3_IRQn);
 
   /* USER CODE BEGIN TIM3_MspDeInit 1 */
 
@@ -279,11 +266,9 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* htim_base)
   /* USER CODE END TIM14_MspDeInit 0 */
     /* Peripheral clock disable */
     __TIM14_CLK_DISABLE();
-  
-    /**TIM14 GPIO Configuration    
-    PA7     ------> TIM14_CH1 
-    */
-    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_7);
+
+    /* Peripheral interrupt DeInit*/
+    HAL_NVIC_DisableIRQ(TIM14_IRQn);
 
   /* USER CODE BEGIN TIM14_MspDeInit 1 */
 
