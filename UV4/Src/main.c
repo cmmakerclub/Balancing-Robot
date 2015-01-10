@@ -129,10 +129,10 @@ float kd_angle = 0.56;
 //float kd_velo = 1.1;
 //float ki_velo_dyna = 0.2;
 
-float kp_velo = 0.1;
-float ki_velo = 0.001;
+float kp_velo = 3;
+float ki_velo = 5;
 float kd_velo = 0;
-float ki_velo_dyna = 7;
+float ki_velo_dyna = 6;
 
 static float error_velo_sum;
 static float error_velo_sum_dynamic;
@@ -769,12 +769,12 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
 void Sampling_isr(void)
 {
   static int8_t is_1st_start;
-  static int8_t count_velo;
+
   static float angle_from_velo; 
   static float velo_from_force;
   static float velocity_mL;
   static float velocity_mR;
-  static int32_t count_un_integrate = 0;
+
   
   // call at 200 Hz
   MPU6050_GetRawAccelGyro(AccelGyro);
@@ -799,29 +799,27 @@ void Sampling_isr(void)
   /*888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888*/
   
   ////////////////////////////////////
-  // PI controller for Velocity at 50 Hz
-  count_velo --;
-  if (count_velo <= 0)
-  {
+  // PI controller for Velocity 
+
     //88888888888888888888 Velocity 888888888888888888888//
 
     float error_velo_prev = error_velo;
     error_velo = velo_ref - velo_from_force; 
-    error_velo_dot = (error_velo - error_velo_prev) * 50.0f ;    // differential of velocity == force
+    error_velo_dot = (error_velo - error_velo_prev)  ;    // differential of velocity == force
     
 
       if (velo_ref == 0)
       {
-        error_velo_sum += error_velo * 0.02f;   // 4 * dt = 4 * 0.005 = 0.02
+        error_velo_sum += error_velo * 0.005f;   // 4 * dt = 4 * 0.005 = 0.02
         error_velo_sum_dynamic = 0;
       }
       else
       {
-        error_velo_sum_dynamic += error_velo * 0.02f;
+        error_velo_sum_dynamic += error_velo * 0.005f;
       }
-    }
+
     
-    if (count_un_integrate > 0) count_un_integrate --;
+
     
     
     error_velo_sum_output = error_velo_sum * ki_velo + error_velo_sum_dynamic * ki_velo_dyna; 
@@ -831,7 +829,7 @@ void Sampling_isr(void)
 
     //888888888888888888888888888888888888888888888888888// 
 
-    angle_from_velo = (error_velo_dot * kp_velo) + (error_velo_sum_output); 
+    angle_from_velo = ((error_velo_dot * kp_velo) + (error_velo_sum_output)) * 0.005f; 
    
     if (angle_from_velo > 10) angle_from_velo = 10;
     if (angle_from_velo < -10) angle_from_velo = -10;
@@ -861,6 +859,9 @@ void Sampling_isr(void)
   ///////////////////////////////////
   // PD controller for angle at 200 Hz
   
+
+  
+  
   float error_angle_prev = error_angle ;
 
 
@@ -889,6 +890,7 @@ void Sampling_isr(void)
   }
   
   velocity = velo_from_force;
+  
   position +=  velo_from_force * dt;
   
   A4988_driver_output(velocity_mL, velocity_mR);
