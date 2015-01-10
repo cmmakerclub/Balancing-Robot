@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 06/01/2015 17:24:27
+  * Date               : 11/01/2015 03:11:57
   * Description        : Main program body
   ******************************************************************************
   *
@@ -340,12 +340,14 @@ void MX_I2C1_Init(void)
 /* TIM3 init function */
 void MX_TIM3_Init(void)
 {
+
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 239;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim3.Init.Period = 65535;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   HAL_TIM_Base_Init(&htim3);
+
 }
 
 /* TIM14 init function */
@@ -394,10 +396,7 @@ void MX_USART1_UART_Init(void)
 {
 
   huart1.Instance = USART1;
-
-//  huart1.Init.BaudRate = 9600;    // for ble
-  huart1.Init.BaudRate = 115200;    // for debug
-
+  huart1.Init.BaudRate = 9600;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
