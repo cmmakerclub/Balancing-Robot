@@ -99,8 +99,10 @@ float L_R_ref_filted ;
 
 // state//
 float angle = 0;    
+float angle_dot = 0;
 float velocity = 0;    
 float position = 0;  
+float force = 0;  
 
 // PID variable //
 
@@ -335,14 +337,12 @@ void MX_I2C1_Init(void)
 /* TIM3 init function */
 void MX_TIM3_Init(void)
 {
-
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 239;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim3.Init.Period = 65535;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   HAL_TIM_Base_Init(&htim3);
-
 }
 
 /* TIM14 init function */
@@ -617,12 +617,18 @@ void Ahrs(void)
 		q3_dot -= (beta * s3);
 		q4_dot -= (beta * s4);
 	}
+  
+  // angular velocity
+  
+
+  angle_dot = asinf(2*(q2_dot*q4_dot - q1_dot*q3_dot)) * rad2deg;   //pitch
+  
 	// Integrate 
 	q1 += q1_dot * dt;
 	q2 += q2_dot * dt;
 	q3 += q3_dot * dt;
 	q4 += q4_dot * dt;
-  
+
 	// Normalise
 	Norm = sqrtf(q1 * q1 + q2 * q2 + q3 * q3 + q4 * q4 );
 	q1 /= Norm;
@@ -634,9 +640,8 @@ void Ahrs(void)
 //  float x=  2*(0.5 - q2*q2 - q3*q3);
 //	y_roll =  2*(q3*q4 + q1*q2);
 //  q_roll = atan2f(y_roll,x) * rad2deg;  //roll
-  
-  float y_pitch = 2*(q2*q4 - q1*q3)	;
-  angle = asinf(y_pitch) * rad2deg;   //pitch
+
+  angle = asinf(2*(q2*q4 - q1*q3)) * rad2deg;   //pitch
      
 }
 void A4988_driver_state(FunctionalState tmp)
@@ -833,13 +838,13 @@ void Sampling_isr(void)
   if (Battery_voltage < 10) angle_from_velo = 0;    // battery protection
   if (front_distance  < 30 && rear_distance > 30 && uart_watchdog > 0) 
   {
-    angle_from_velo = -2 ;
-    count_un_integrate = 500;   // 800 == 8 sec
+//    angle_from_velo = -2;
+//    count_un_integrate = 500;   // 800 == 8 sec
   }
   if (rear_distance  < 30 && front_distance > 30 && uart_watchdog > 0)
   {
-    angle_from_velo = 2 ;
-    count_un_integrate = 500;
+//    angle_from_velo = 2;
+//    count_un_integrate = 500;
   }
   
   ///////////////////////////////////
@@ -850,9 +855,11 @@ void Sampling_isr(void)
   error_angle = angle - angle_from_velo - 2.7f;    // 2.7f from unbalance mass
   error_angle_dot = (error_angle - error_angle_prev) ;
   
-  velo_from_force += ((error_angle * kp_angle * dt) + (error_angle_dot * kd_angle));    // velocity == integreted of force
+  force = ((error_angle * kp_angle * dt) + (error_angle_dot * kd_angle));
   
-  ////////////////////////////////////
+  velo_from_force += force;   // velocity == integreted of force
+  
+  ///////////////////////////////////
   
   if (velo_from_force > limit_speed) velo_from_force = limit_speed;
   if (velo_from_force < -limit_speed) velo_from_force = -limit_speed; 
@@ -879,7 +886,7 @@ void Sampling_isr(void)
   A4988_driver_output(velocity_mL, velocity_mR);
   
   
-  Print_Debug();
+//  Print_Debug();
   ////////////////////////////////////  
   /*======================================================================================================*/
 }
@@ -915,12 +922,11 @@ void Print_Debug(void)
   uint8_t header[2] = {0x7e, 0x7e};
   uint8_t terminator[2] = {0xe7, 0xe7};
   HAL_UART_Transmit(&huart1, header, 2, 1);    // sent header
-  HAL_UART_Transmit(&huart1, (uint8_t *)&velocity, 4, 1);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&angle_dot, 4, 1);
   HAL_UART_Transmit(&huart1, (uint8_t *)&angle, 4, 1);
-  HAL_UART_Transmit(&huart1, (uint8_t *)&position, 4, 1);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&force, 4, 1);
   HAL_UART_Transmit(&huart1, terminator, 2, 1);    // sent header
 }
-
 
 /* USER CODE END 4 */
 
