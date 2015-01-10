@@ -751,11 +751,11 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
   
   // Motor L
     TIM14 -> ARR = period_L;
-    if ( TIM14 -> CNT > TIM14 -> ARR) TIM14 -> CNT = period_L * 0.9f;   //reset counter register tim14
+    if ( TIM14 -> CNT > TIM14 -> ARR) TIM14 -> CNT = period_L * 0.5f;   //reset counter register tim14
   
   // Motor R
     TIM3 -> ARR = period_R;
-    if ( TIM3 -> CNT > TIM3 -> ARR) TIM3 -> CNT = period_L * 0.9f;    //reset counter register tim3
+    if ( TIM3 -> CNT > TIM3 -> ARR) TIM3 -> CNT = period_L * 0.5f;    //reset counter register tim3
 
 }
 
@@ -877,9 +877,6 @@ void Sampling_isr(void)
     velocity_mR = velo_from_force - L_R_ref_filted;
   }
   
-//    velocity_mL = velo_from_force - L_R_ref_filted;
-//    velocity_mR = velo_from_force + L_R_ref_filted;
-  
   velocity = velo_from_force;
   position +=  velo_from_force * dt;
   
@@ -917,12 +914,12 @@ void Print_BLE(void)
   
 }
 
-void Print_Debug(void)
+void Print_Debug(void) 
 {
   uint8_t header[2] = {0x7e, 0x7e};
   uint8_t terminator[2] = {0xe7, 0xe7};
   HAL_UART_Transmit(&huart1, header, 2, 1);    // sent header
-  HAL_UART_Transmit(&huart1, (uint8_t *)&angle_dot, 4, 1);
+// HAL_UART_Transmit(&huart1, (uint8_t *)&angle_dot, 4, 1);
   HAL_UART_Transmit(&huart1, (uint8_t *)&angle, 4, 1);
   HAL_UART_Transmit(&huart1, (uint8_t *)&force, 4, 1);
   HAL_UART_Transmit(&huart1, terminator, 2, 1);    // sent header
