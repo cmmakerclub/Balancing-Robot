@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * File Name          : main.c
-  * Date               : 11/01/2015 03:11:57
+  * Date               : 11/01/2015 03:58:20
   * Description        : Main program body
   ******************************************************************************
   *
@@ -76,7 +76,6 @@ TIM_HandleTypeDef htim16;
 TIM_HandleTypeDef htim17;
 
 UART_HandleTypeDef huart1;
-DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
 
@@ -142,7 +141,6 @@ static float error_velo_sum_output;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_ADC_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM3_Init(void);
@@ -197,7 +195,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_ADC_Init();
   MX_I2C1_Init();
   MX_TIM3_Init();
@@ -321,7 +318,7 @@ void MX_I2C1_Init(void)
 {
 
   hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x2000090E;
+  hi2c1.Init.Timing = 0x0000020B;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLED;
@@ -396,7 +393,7 @@ void MX_USART1_UART_Init(void)
 {
 
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 9600;
+  huart1.Init.BaudRate = 115200;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -406,18 +403,6 @@ void MX_USART1_UART_Init(void)
   huart1.Init.OneBitSampling = UART_ONEBIT_SAMPLING_DISABLED ;
   huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
   HAL_UART_Init(&huart1);
-
-}
-
-/** 
-  * Enable DMA controller clock
-  */
-void MX_DMA_Init(void) 
-{
-  /* DMA controller clock enable */
-  __DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
 
 }
 
@@ -442,7 +427,7 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
+  GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
   HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA0 */
@@ -451,25 +436,18 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA4 PA6 PA7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_6|GPIO_PIN_7;
+  /*Configure GPIO pins : PA4 PA5 PA6 PA7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PA5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_MEDIUM;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PB1 */
   GPIO_InitStruct.Pin = GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_MEDIUM;
+  GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
@@ -654,7 +632,7 @@ void A4988_driver_state(FunctionalState tmp)
 {
   if (tmp)
   {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
   }
   else
   {
@@ -794,50 +772,34 @@ void Sampling_isr(void)
     A4988_driver_state(DISABLE);
   }
 
-  /*888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888*/
-  
-  ////////////////////////////////////
-  // PI controller for Velocity 
-
-    //88888888888888888888 Velocity 888888888888888888888//
 
     float error_velo_prev = error_velo;
     error_velo = velo_ref - velo_from_force; 
     error_velo_dot = (error_velo - error_velo_prev)  ;    // differential of velocity == force
-    
 
-      if (velo_ref == 0)
-      {
-        error_velo_sum += error_velo * 0.005f;   // 4 * dt = 4 * 0.005 = 0.02
-        error_velo_sum_dynamic = 0;
-      }
-      else
-      {
-        error_velo_sum_dynamic += error_velo * 0.005f;
-      }
+    if (velo_ref == 0)
+    {
+      error_velo_sum += error_velo * 0.005f;   // 4 * dt = 4 * 0.005 = 0.02
+      error_velo_sum_dynamic = 0;
+    }
+    else
+    {
+      error_velo_sum_dynamic += error_velo * 0.005f;
+    }
 
-    
 
-    
-    
-    error_velo_sum_output = error_velo_sum * ki_velo + error_velo_sum_dynamic * ki_velo_dyna; 
-    
-    if (error_velo_sum_output > limit_compensate_angle) error_velo_sum_output = limit_compensate_angle;    // prevent wildup
-    if (error_velo_sum_output < -limit_compensate_angle) error_velo_sum_output = -limit_compensate_angle;    
-
-    //888888888888888888888888888888888888888888888888888// 
-
-    angle_from_velo = ((error_velo_dot * kp_velo) + (error_velo_sum_output)) * 0.005f; 
-   
-    if (angle_from_velo > 10) angle_from_velo = 10;
-    if (angle_from_velo < -10) angle_from_velo = -10;
-
-  ////////////////////////////////////
+  error_velo_sum_output = error_velo_sum * ki_velo + error_velo_sum_dynamic * ki_velo_dyna; 
   
-  /*======================================================================================================*/
-//  angle_from_velo = 0;  // test velocity control
-  /*======================================================================================================*/ 
-  
+  if (error_velo_sum_output > limit_compensate_angle) error_velo_sum_output = limit_compensate_angle;    // prevent wildup
+  if (error_velo_sum_output < -limit_compensate_angle) error_velo_sum_output = -limit_compensate_angle;    
+
+
+  angle_from_velo = ((error_velo_dot * kp_velo) + (error_velo_sum_output)) * 0.005f; 
+ 
+  if (angle_from_velo > 10) angle_from_velo = 10;
+  if (angle_from_velo < -10) angle_from_velo = -10;
+
+      
   if (Battery_voltage < 10) angle_from_velo = 0;    // battery protection
   if (front_distance  < 30 && rear_distance > 30 && uart_watchdog > 0) 
   {
