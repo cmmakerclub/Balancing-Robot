@@ -101,7 +101,7 @@ float L_R_ref_filted ;
 float angle = 0;    
 float velocity = 0;    
 float position = 0;  
-
+float force = 0;
 // PID variable //
 
 float posi_ref = 0;
@@ -164,7 +164,7 @@ float Smooth_filter(float alfa, float new_data, float prev_data);
 void SR_04_measuring(void);
 void Mesuaring_batt(void);
 void Sampling_isr(void);
-
+void Print_Debug(void) ;
 void DMA_callback(struct __DMA_HandleTypeDef *hdma);
 void DMA_callback_1(void);
 
@@ -223,7 +223,6 @@ int main(void)
   /* Infinite loop */
   while (1)
   {
-    HAL_UART_Transmit(&huart1, (uint8_t *)uart_data_sent, 20, 5);
     SR_04_measuring();    // mesuaring disrance 
     Mesuaring_batt();   // mesuaring battary voltage
     if (uart_watchdog != 0)
@@ -415,7 +414,7 @@ void MX_USART1_UART_Init(void)
 {
 
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 9600;
+  huart1.Init.BaudRate = 115200;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -520,7 +519,7 @@ void Initial_MPU6050(void)
   MPU6050_WriteBit(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_INT_ENABLE, MPU6050_INTERRUPT_DATA_RDY_BIT, ENABLE);
 
   //		SetDLPF(MPU6050_DLPF_BW_5)
-  MPU6050_WriteBits(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_CONFIG, MPU6050_CFG_DLPF_CFG_BIT, MPU6050_CFG_DLPF_CFG_LENGTH, MPU6050_DLPF_BW_98);
+  MPU6050_WriteBits(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_CONFIG, MPU6050_CFG_DLPF_CFG_BIT, MPU6050_CFG_DLPF_CFG_LENGTH, MPU6050_DLPF_BW_42);
  
   //    SetSleepModeStatus(DISABLE)
   MPU6050_WriteBit(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, DISABLE);
@@ -662,7 +661,7 @@ void Ahrs(void)
   
   float y_pitch = 2*(q2*q4 - q1*q3)	;
   angle = asinf(y_pitch) * rad2deg;   //pitch
-     
+  angle -= 5;
 }
 void A4988_driver_state(FunctionalState tmp)
 {
@@ -899,13 +898,13 @@ void Sampling_isr(void)
   if (Battery_voltage < 10) angle_from_velo = 0;    // battery protection
   if (front_distance  < 30 && rear_distance > 30) 
   {
-    angle_from_velo = -2 ;
-    count_un_integrate = 500;   // 800 == 8 sec
+//    angle_from_velo = -2 ;
+//    count_un_integrate = 500;   // 800 == 8 sec
   }
   if (rear_distance  < 30 && front_distance > 30)
   {
-    angle_from_velo = 2 ;
-    count_un_integrate = 500;
+//    angle_from_velo = 2 ;
+//    count_un_integrate = 500;
   }
   
   ///////////////////////////////////
@@ -913,10 +912,10 @@ void Sampling_isr(void)
   
   float error_angle_prev = error_angle ;
 
-  error_angle = angle - angle_from_velo - 5;    // 5 from unbalance model
+  error_angle = angle - angle_from_velo ;    // 5 from unbalance model
   error_angle_dot = (error_angle - error_angle_prev) ;
-  
-  velo_from_force += ((error_angle * kp_angle * dt) + (error_angle_dot * kd_angle));    // velocity == integreted of force
+  force =  ((error_angle * kp_angle * dt) + (error_angle_dot * kd_angle)); 
+  velo_from_force += force ;  // velocity == integreted of force
   
   ////////////////////////////////////
   
@@ -933,6 +932,8 @@ void Sampling_isr(void)
 //  velocity_mR =- L_R_ref;
   
   A4988_driver_output(velocity_mL, velocity_mR);
+  
+  Print_Debug(); 
   
   ////////////////////////////////////  
   /*======================================================================================================*/
@@ -958,6 +959,16 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
   ch4 = raw_data_uart[i];
   
   uart_watchdog = 25;     // Reset watchdog timer
+}
+void Print_Debug(void) 
+{
+  uint8_t header[2] = {0x7e, 0x7e};
+  uint8_t terminator[2] = {0xe7, 0xe7};
+  HAL_UART_Transmit(&huart1, header, 2, 1);    // sent header
+// HAL_UART_Transmit(&huart1, (uint8_t *)&angle_dot, 4, 1);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&angle, 4, 1);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&force, 4, 1);
+  HAL_UART_Transmit(&huart1, terminator, 2, 1);    // sent header
 }
 /* USER CODE END 4 */
 
