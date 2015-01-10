@@ -769,7 +769,6 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
 void Sampling_isr(void)
 {
   static int8_t is_1st_start;
-
   static float angle_from_velo; 
   static float velo_from_force;
   static float velocity_mL;
@@ -891,7 +890,7 @@ void Sampling_isr(void)
   
   velocity = velo_from_force;
   
-  position +=  velo_from_force * dt;
+  position +=  velocity * dt;
   
   A4988_driver_output(velocity_mL, velocity_mR);
   
@@ -935,10 +934,11 @@ void Print_Debug(void)
 {
   uint8_t header[2] = {0x7e, 0x7e};
   uint8_t terminator[2] = {0xe7, 0xe7};
+  
   HAL_UART_Transmit(&huart1, header, 2, 1);    // sent header
-// HAL_UART_Transmit(&huart1, (uint8_t *)&angle_dot, 4, 1);
-  HAL_UART_Transmit(&huart1, (uint8_t *)&angle, 4, 1);
   HAL_UART_Transmit(&huart1, (uint8_t *)&force, 4, 1);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&angle, 4, 1);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&position, 4, 1);
   HAL_UART_Transmit(&huart1, terminator, 2, 1);    // sent header
 }
 
