@@ -625,7 +625,7 @@ void Ahrs(void)
 
 
   angle = asinf(2*(q2*q4 - q1*q3)) * rad2deg;   //pitch
-  angle -= 5;    
+  angle -= 4;    
 
 }
 void A4988_driver_state(FunctionalState tmp)
