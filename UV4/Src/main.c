@@ -104,38 +104,28 @@ float position = 0;
 
 float force = 0;
 
-// PID variable //
 
-float posi_ref = 0;
+float ref_angle = 0;
+float ref_angle_dot = 0;
+float ref_x = 0;
+float ref_x_dot = 0;
 
-float velo_ref = 0;
 float L_R_ref = 0;
 
-float error_posi = 0; 
-float error_posi_dot = 0;
+static float lqr_angle = 0;
+static float lqr_angle_dot = 0;
+static float lqr_x = 0; 
+static float lqr_x_dot = 0;
 
-float error_angle = 0; 
-float error_angle_dot = 0;
+float k1 = 1.1694 ;
+float k2 = 2.2268;
+float k3 = 0.6872;
+float k4 = 1.0622;
 
-float error_velo = 0; 
-float error_velo_dot = 0;
+float ki = 0;
 
-float kp_angle = 25;
-float kd_angle = 0.56;
 
-//float kp_velo = 1.8;
-//float ki_velo = 0.05;
-//float kd_velo = 1.1;
-//float ki_velo_dyna = 0.2;
 
-float kp_velo = 3;
-float ki_velo = 5;
-float kd_velo = 0;
-float ki_velo_dyna = 6;
-
-static float error_velo_sum;
-static float error_velo_sum_dynamic;
-static float error_velo_sum_output; 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -229,12 +219,12 @@ int main(void)
     Mesuaring_batt();   // mesuaring battary voltage
     if (uart_watchdog != 0)
     {
-      velo_ref = (float)ch2 * 0.4f;
+      lqr_x_dot = (float)ch2 * 0.4f;
       L_R_ref = (float)ch1 * 0.04f;
     }
     else
     {
-      velo_ref = 0;
+      lqr_x_dot = 0;
       L_R_ref = 0;
     }
     
@@ -393,7 +383,7 @@ void MX_USART1_UART_Init(void)
 {
 
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
+  huart1.Init.BaudRate = 9600;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -746,7 +736,7 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
 void Sampling_isr(void)
 {
   static int8_t is_1st_start;
-  static float angle_from_velo; 
+
   static float velo_from_force;
   static float velocity_mL;
   static float velocity_mR;
@@ -761,7 +751,9 @@ void Sampling_isr(void)
     if (!is_1st_start)
     {
       is_1st_start = 1;
-      error_velo_sum = 0;
+      position = 0;
+      velocity = 0;
+      angle_dot = 0;
       velo_from_force = 0;
       A4988_driver_state(ENABLE);
     }
@@ -771,83 +763,37 @@ void Sampling_isr(void)
     is_1st_start = 0;
     A4988_driver_state(DISABLE);
   }
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
+  lqr_angle = angle;
+  lqr_angle_dot = angle_dot;
+  lqr_x = position; 
+  lqr_x_dot = velocity;
 
-    float error_velo_prev = error_velo;
-    error_velo = velo_ref - velo_from_force; 
-    error_velo_dot = (error_velo - error_velo_prev)  ;    // differential of velocity == force
-
-    if (velo_ref == 0)
-    {
-      error_velo_sum += error_velo * 0.005f;   // 4 * dt = 4 * 0.005 = 0.02
-      error_velo_sum_dynamic = 0;
-    }
-    else
-    {
-      error_velo_sum_dynamic += error_velo * 0.005f;
-    }
-
-
-  error_velo_sum_output = error_velo_sum * ki_velo + error_velo_sum_dynamic * ki_velo_dyna; 
   
-  if (error_velo_sum_output > limit_compensate_angle) error_velo_sum_output = limit_compensate_angle;    // prevent wildup
-  if (error_velo_sum_output < -limit_compensate_angle) error_velo_sum_output = -limit_compensate_angle;    
-
-
-  angle_from_velo = ((error_velo_dot * kp_velo) + (error_velo_sum_output)) * 0.005f; 
- 
-  if (angle_from_velo > 10) angle_from_velo = 10;
-  if (angle_from_velo < -10) angle_from_velo = -10;
-
-      
-  if (Battery_voltage < 10) angle_from_velo = 0;    // battery protection
-  if (front_distance  < 30 && rear_distance > 30 && uart_watchdog > 0) 
-  {
-
-//    angle_from_velo = -2;
-
-//    count_un_integrate = 500;   // 800 == 8 sec
-  }
-  if (rear_distance  < 30 && front_distance > 30 && uart_watchdog > 0)
-  {
-
-//    angle_from_velo = 2;
-
-//    count_un_integrate = 500;
-  }
+  ref_angle = 0;
+  ref_angle_dot = 0;
+  ref_x = 0;
+  ref_x_dot = 0;
   
-  ///////////////////////////////////
-  // PD controller for angle at 200 Hz
+  force = (k1 * lqr_angle) + (k2 * lqr_angle_dot) * dt + (k3 * lqr_x) + (k4 * lqr_x_dot) * dt;
   
 
   
-  
-  float error_angle_prev = error_angle ;
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-  error_angle = angle - angle_from_velo ;    // 5 from unbalance model
-  error_angle_dot = (error_angle - error_angle_prev) ;
-  force =  ((error_angle * kp_angle * dt) + (error_angle_dot * kd_angle)); 
   velo_from_force += force ;  // velocity == integreted of force
-
-  
-  ///////////////////////////////////
   
   if (velo_from_force > limit_speed) velo_from_force = limit_speed;
   if (velo_from_force < -limit_speed) velo_from_force = -limit_speed; 
   
   L_R_ref_filted = Smooth_filter(0.1, L_R_ref, L_R_ref_filted);
   
-  if (velo_from_force >= 0) 
-  {
-    velocity_mL = velo_from_force - L_R_ref_filted;
-    velocity_mR = velo_from_force + L_R_ref_filted;
-  }
-  else
-  {
-    velocity_mL = velo_from_force + L_R_ref_filted;
-    velocity_mR = velo_from_force - L_R_ref_filted;
-  }
+
+  velocity_mL = velo_from_force - L_R_ref_filted;
+  velocity_mR = velo_from_force + L_R_ref_filted;
+
   
   velocity = velo_from_force;
   
@@ -856,7 +802,7 @@ void Sampling_isr(void)
   A4988_driver_output(velocity_mL, velocity_mR);
   
 
-  Print_Debug(); 
+// Print_Debug(); 
   
 
   ////////////////////////////////////  
