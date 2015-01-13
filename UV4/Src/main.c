@@ -117,10 +117,13 @@ static float lqr_angle_dot = 0;
 static float lqr_x = 0; 
 static float lqr_x_dot = 0;
 
-float k1 = 1.1686;
+float k1 = 1.1686;  // 2nd version
 float k2 = 1.5301;
 float k3 = 0.1791;
 float k4 = 0.1715;
+
+
+
 
 float ki = 0;
 
