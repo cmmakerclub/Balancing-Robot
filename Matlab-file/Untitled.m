@@ -76,9 +76,9 @@ Q = C'*C
 Q=Q*0;
 
 Q(1,1)=20;
-Q(2,2)=0;
+Q(2,2)=0.1;
 Q(3,3)=0;
-Q(4,4)=20;
+Q(4,4)=0;
 R = 1;
 [K] = dlqr(A,B,Q,R)
 
@@ -95,7 +95,9 @@ sys_cl = ss(Ac,Bc,Cc,Dc,Ts,'statename',states,'inputname',inputs,'outputname',ou
 
 figure(1)
 
-t = 0:0.005:8;
+X0=[0;0;0;0];
+
+t = 0:0.005:10;
 r =0.2*ones(size(t));
 [y,t,x]=lsim(sys_cl,r,t);
 [AX,H1,H2] = plotyy(t,y(:,1),t,y(:,2),'plot');
@@ -103,5 +105,5 @@ set(get(AX(1),'Ylabel'),'String','robot angle (degree)')
 set(get(AX(2),'Ylabel'),'String','robot position (cm)')
 title('Step Response with Digital LQR Control')
 
-figure(2)
-step(sys_cl)
+%figure(2)
+%step(sys_cl)

@@ -117,10 +117,15 @@ static float lqr_angle_dot = 0;
 static float lqr_x = 0; 
 static float lqr_x_dot = 0;
 
-float k1 = 1.1686;  // 2nd version
-float k2 = 1.5301;
-float k3 = 0.1791;
-float k4 = 0.1715;
+//float k1 = 1.1686;  // 2nd version
+//float k2 = 1.5301;
+//float k3 = 0.1791;
+//float k4 = 0.1715;
+
+float  k1 = 1.8202;  // 2nd version
+float  k2 = 2.4008;
+float  k3 = 0;
+float  k4 = 0;
 
 
 
@@ -220,6 +225,7 @@ int main(void)
   {
     SR_04_measuring();    // mesuaring disrance 
     Mesuaring_batt();   // mesuaring battary voltage
+    
     if (uart_watchdog != 0)
     {
       lqr_x_dot = (float)ch2 * 0.4f;
@@ -744,7 +750,6 @@ void Sampling_isr(void)
   static float velocity_mL;
   static float velocity_mR;
 
-  
   // call at 200 Hz
   MPU6050_GetRawAccelGyro(AccelGyro);
   Ahrs();
@@ -758,10 +763,11 @@ void Sampling_isr(void)
       velocity = 0;
       angle_dot = 0;
       velo_from_force = 0;
+      force = 0;
       A4988_driver_state(ENABLE);
     }
   }
-  if ((angle > limit_angle) || (angle < -limit_angle))
+  if ((angle > limit_angle) || (angle < -limit_angle) || ((force > 10 || force < -10)  && (lqr_angle_dot < 5 && lqr_angle_dot > -5)))
   {
     is_1st_start = 0;
     A4988_driver_state(DISABLE);
@@ -793,14 +799,16 @@ void Sampling_isr(void)
   
   L_R_ref_filted = Smooth_filter(0.1, L_R_ref, L_R_ref_filted);
   
-
+  velocity = velo_from_force;
+  
   velocity_mL = velo_from_force - L_R_ref_filted;
   velocity_mR = velo_from_force + L_R_ref_filted;
 
-  
-  velocity = velo_from_force;
-  
   position +=  velocity * dt;
+  
+  // 10v cut low voltage battery 
+  
+  if (Battery_voltage < 10) A4988_driver_state(DISABLE);
   
   A4988_driver_output(velocity_mL, velocity_mR);
   
