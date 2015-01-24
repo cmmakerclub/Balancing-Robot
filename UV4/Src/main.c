@@ -108,29 +108,33 @@ float force = 0;
 float ref_angle = 0;
 float ref_angle_dot = 0;
 float ref_x = 0;
-float ref_x_dot = 0;
+float ref_x_dot = 1;
 
 float L_R_ref = 0;
 
-static float lqr_angle = 0;
-static float lqr_angle_dot = 0;
-static float lqr_x = 0; 
-static float lqr_x_dot = 0;
+float lqr_angle = 0;
+float lqr_angle_dot = 0;
+float lqr_x = 0; 
+float lqr_x_dot = 0;
+
+float error = 0;
+float error_sum = 0;
+float kp = 2;
+float ki = 0;
 
 //float k1 = 1.1686;  // 2nd version
 //float k2 = 1.5301;
 //float k3 = 0.1791;
 //float k4 = 0.1715;
 
-float  k1 = 1.8202;  // 2nd version
-float  k2 = 2.4008;
+float  k1 = 1.6227;  // 2nd version
+float  k2 = 1.7544;
 float  k3 = 0;
 float  k4 = 0;
 
 
 
 
-float ki = 0;
 
 
 
@@ -745,11 +749,24 @@ void A4988_driver_output(float velocity_mL_tmp, float velocity_mR_tmp)
 void Sampling_isr(void)
 {
   static int8_t is_1st_start;
-
+  static int8_t loop_count;
   static float velo_from_force;
   static float velocity_mL;
   static float velocity_mR;
-
+  
+  // call at 20 Hz 
+  if (loop_count <= 2)
+  {
+    loop_count = 0;
+    
+    // PD velocity Control
+      error = ref_x_dot - velocity;
+      error_sum += error * 0.05;
+      
+     // ref_angle = ((error * kp) + (error_sum * ki)) / 20.0f;
+  }
+  
+  loop_count ++;
   // call at 200 Hz
   MPU6050_GetRawAccelGyro(AccelGyro);
   Ahrs();
@@ -764,6 +781,8 @@ void Sampling_isr(void)
       angle_dot = 0;
       velo_from_force = 0;
       force = 0;
+      ref_angle = 0;
+      error_sum = 0;
       A4988_driver_state(ENABLE);
     }
   }
@@ -774,16 +793,10 @@ void Sampling_isr(void)
   }
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-  lqr_angle = angle;
+  lqr_angle = angle - 5;
   lqr_angle_dot = angle_dot;
   lqr_x = position; 
   lqr_x_dot = velocity;
-
-  
-  ref_angle = 0;
-  ref_angle_dot = 0;
-  ref_x = 0;
-  ref_x_dot = 0;
   
   force = (k1 * lqr_angle) + (k2 * lqr_angle_dot) * dt + (k3 * lqr_x) + (k4 * lqr_x_dot) * dt;
   
@@ -797,15 +810,24 @@ void Sampling_isr(void)
   if (velo_from_force > limit_speed) velo_from_force = limit_speed;
   if (velo_from_force < -limit_speed) velo_from_force = -limit_speed; 
   
-  L_R_ref_filted = Smooth_filter(0.1, L_R_ref, L_R_ref_filted);
+  
   
   velocity = velo_from_force;
-  
-  velocity_mL = velo_from_force - L_R_ref_filted;
-  velocity_mR = velo_from_force + L_R_ref_filted;
-
   position +=  velocity * dt;
+  velocity_mL = velocity;
+  velocity_mR = velocity;
   
+  if (velocity < -5 || velocity > 5)
+  {
+    L_R_ref_filted = Smooth_filter(0.005, L_R_ref, L_R_ref_filted);
+  }
+  else
+  {
+    L_R_ref_filted = Smooth_filter(0.05, 0, L_R_ref_filted);
+  }
+  
+  velocity_mL = velocity - L_R_ref_filted;
+  velocity_mR = velocity + L_R_ref_filted;
   // 10v cut low voltage battery 
   
   if (Battery_voltage < 10) A4988_driver_state(DISABLE);
